@@ -18,6 +18,7 @@
     python3 scripts/canary.py --dry-run  # 只檢查，不開 issue
 """
 import asyncio
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -32,16 +33,45 @@ from src.suno import SunoRunner  # noqa: E402
 REPO = "yazelin/suno-web"
 LABEL = "canary"
 LOW_CREDITS = 10  # 剩這麼多以下就提醒：一單要 10 點，等於連一單都生不出來
+SNAPSHOT = Path("/tmp/suno-canary-profile")
+# 快取重建得回來，不用複製；佔了 profile 大部分體積。
+_SKIP = shutil.ignore_patterns("Singleton*", "*.log", "Cache", "Code Cache",
+                               "GPUCache", "DawnCache", "ShaderCache",
+                               "component_crx_cache", "Crash Reports")
+
+
+async def _start_browser() -> tuple[BrowserManager | None, str]:
+    """先用正式 profile；被常駐服務佔用時改用快照副本。
+
+    部署機上服務是 24 小時開著的，Chrome 對同一個 user-data-dir 只允許一個
+    實例，所以金絲雀直接開會被擋。複製一份（跳過快取）就能用同一份登入態
+    檢查，也不會動到正在跑的那個瀏覽器。
+    """
+    bm = BrowserManager(headless=True)
+    try:
+        await bm.start()
+        return bm, "正式 profile"
+    except Exception as e:
+        if "ProcessSingleton" not in str(e) and "立刻結束" not in str(e):
+            return None, f"瀏覽器起不來：{e}"
+    shutil.rmtree(SNAPSHOT, ignore_errors=True)
+    try:
+        shutil.copytree(settings.profile_dir, SNAPSHOT, ignore=_SKIP,
+                        symlinks=True, dirs_exist_ok=True)
+        bm = BrowserManager(headless=True, profile_dir=str(SNAPSHOT))
+        await bm.start()
+        return bm, "快照副本（正式 profile 被服務佔用）"
+    except Exception as e:
+        return None, f"用快照副本也起不來：{e}"
 
 
 async def check() -> list[str]:
     """回傳問題清單，空的就是一切正常。"""
     problems: list[str] = []
-    bm = BrowserManager(headless=True)
-    try:
-        await bm.start()
-    except Exception as e:
-        return [f"瀏覽器起不來：{e}"]
+    bm, how = await _start_browser()
+    if bm is None:
+        return [how]
+    print(f"（用 {how} 檢查）")
 
     runner = SunoRunner(bm, settings)
     captcha: list[str] = []
