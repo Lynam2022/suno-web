@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import time
+import time
 from pathlib import Path
 
 
@@ -104,18 +105,36 @@ def _login(worker: int = 0) -> None:
     profile = Path(get_worker_profile_dir(worker))
     profile.mkdir(parents=True, exist_ok=True)
 
+    # 沒有 DISPLAY 就開不出視窗。遠端登入時最常見的原因是用了一般 ssh，
+    # 少了 -X，那樣 Chrome 會一啟動就退出，看起來像「秒關」。
+    if not os.getenv("DISPLAY") and not os.getenv("WAYLAND_DISPLAY"):
+        print("沒有 DISPLAY，開不出瀏覽器視窗。")
+        print("如果是從別台機器連進來，改用：ssh -X <這台>，再跑一次這個指令。")
+        sys.exit(1)
+
     print(f"帳號 {worker} 的 profile：{profile}")
     print("瀏覽器開好了。請在裡面登入 Suno（Google 或 email 都可以，這個視窗"
           "沒有被程式驅動）。")
     print("登完、確認看得到 Create 頁面之後，**把瀏覽器視窗關掉**，這裡就會"
           "自動驗證。不要在這裡按 Ctrl-C，那樣 cookie 可能沒寫回去。")
-    proc = subprocess.Popen(
-        [chrome, f"--user-data-dir={profile}", "--no-first-run",
-         "--no-default-browser-check",
-         # 跟 browser.py 一致：cookie 用固定金鑰加密，profile 才搬得動
-         "--password-store=basic", settings.suno_url],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    proc.wait()
+    # Chrome 的 stderr 留著：它開不起來時的原因只寫在這裡。
+    err_path = profile / "chrome-login-stderr.log"
+    started = time.time()
+    with err_path.open("w", encoding="utf-8") as err:
+        proc = subprocess.Popen(
+            [chrome, f"--user-data-dir={profile}", "--no-first-run",
+             "--no-default-browser-check",
+             # 跟 browser.py 一致：cookie 用固定金鑰加密，profile 才搬得動
+             "--password-store=basic", settings.suno_url],
+            stdout=subprocess.DEVNULL, stderr=err)
+        proc.wait()
+    if time.time() - started < 5:
+        tail = err_path.read_text(encoding="utf-8", errors="replace").strip()
+        print("瀏覽器一開就結束了，代表視窗根本沒出現。Chrome 說：")
+        print(f"  {tail[-500:] or '（沒有輸出）'}")
+        print("常見原因：同一個 profile 已經有另一個 Chrome 開著，"
+              "或這個連線沒有 X 轉發（改用 ssh -X）。")
+        sys.exit(1)
     print("視窗關掉了，驗證登入態……")
     asyncio.run(_verify_login(worker))
 

@@ -1,7 +1,9 @@
 from src.cli import build_parser
 
 
-def test_parser_subcommands():
+def test_parser_subcommands(monkeypatch):
+    # 這台的 .bashrc 有 export SUNO_WEB_SERVER,不清掉會蓋掉預設值
+    monkeypatch.delenv("SUNO_WEB_SERVER", raising=False)
     parser = build_parser()
     args = parser.parse_args(["generate", "a tune", "-o", "out",
                               "--instrumental"])
