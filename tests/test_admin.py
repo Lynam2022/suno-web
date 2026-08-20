@@ -11,6 +11,10 @@ from src.main import create_app
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("API_KEYS", "")
+    # 部署機的 .env 會被 python-dotenv 讀進來（測試常在 repo 目錄下跑），
+    # 不清掉的話測試會跟著那台的設定走。
+    monkeypatch.setenv("ADMIN_URL_PREFIX", "")
+    monkeypatch.setenv("WORKER_COUNT", "1")
     monkeypatch.setenv("ADMIN_USERNAME", "admin")
     monkeypatch.setenv("ADMIN_PASSWORD", "secret123")
     monkeypatch.setenv("ADMIN_SESSION_SECRET", "test-secret")
@@ -182,6 +186,8 @@ def test_manual_cleanup_reports_how_many_it_deleted(client, tmp_path, monkeypatc
 def test_overview_lists_each_account_when_multi_worker(tmp_path, monkeypatch):
     """多帳號時總覽要列出每個帳號的點數與用量;單帳號時不顯示那張表。"""
     monkeypatch.setenv("API_KEYS", "")
+    monkeypatch.setenv("ADMIN_URL_PREFIX", "")
+    monkeypatch.setenv("ADMIN_USERNAME", "admin")
     monkeypatch.setenv("ADMIN_PASSWORD", "secret123")
     monkeypatch.setenv("ADMIN_SESSION_SECRET", "s")
     monkeypatch.setenv("ADMIN_DB_PATH", str(tmp_path / "a.db"))
@@ -212,11 +218,15 @@ def test_overview_lists_each_account_when_multi_worker(tmp_path, monkeypatch):
                               "last_used": None},
                          ]})
     with TestClient(app) as c:
-        c.post("/admin/login", data={"username": "admin", "password": "secret123"},
-               follow_redirects=False)
-        body = c.get("/admin").text
+        r = c.post("/admin/login",
+                   data={"username": "admin", "password": "secret123"},
+                   follow_redirects=False)
+        assert r.headers["location"] == "/admin", "登入失敗就會被導去登入頁"
+        page = c.get("/admin", follow_redirects=False)
+        assert page.status_code == 200
+        body = page.text
 
-    assert "帳號" in body
+    assert "派工輪流" in body
     assert "300（30 單）" in body and "100（10 單）" in body
     assert "已休眠" in body   # worker 1 的瀏覽器沒起來
     admin_db.reset_for_tests()
