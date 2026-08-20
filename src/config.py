@@ -47,6 +47,10 @@ class Settings:
         # 瀏覽器閒置這麼久就關掉。這服務量小、閒置時間長，常駐四個 Chrome
         # 要吃掉近 5 GB；隨用隨開只多花約 10 到 15 秒，相對 2 到 4 分鐘的
         # 生成可以忽略。設 0 表示永不關閉。
+        # 派工模式：credits＝挑剩餘點數最多的帳號（預設，帳號點數不平均時
+        # 才不會有人先見底）；round-robin＝單純輪流。點數讀不到時 credits
+        # 模式本來就會退回輪流，這個變數是給「連退回都不想要」的情況用的。
+        self.dispatch_mode: str = os.getenv("DISPATCH_MODE", "credits")
         self.idle_shutdown_minutes: int = _int(os.getenv("IDLE_SHUTDOWN_MINUTES"), 10)
 
         # 服務

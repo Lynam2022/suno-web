@@ -195,6 +195,8 @@ def _serve() -> None:
     store = JobStore(str(Path(settings.data_dir) / "jobs.db"))
     queue = JobQueue(
         store, pool.runners,
+        credits_of=pool.credits_of,
+        dispatch_mode=settings.dispatch_mode,
         max_size=settings.queue_max_size,
         default_timeout=settings.default_timeout,
         generated_dir=settings.generated_dir,

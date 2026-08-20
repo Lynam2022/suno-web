@@ -215,6 +215,7 @@ python3 scripts/canary.py            # 壞了就開一張帶 canary label 的 Gi
 | `API_KEYS` | API 金鑰，逗號分隔多把；沒設＝開放 | 無 |
 | `GENERATED_DIR` | 音檔落地目錄 | `~/.suno-web/generated` |
 | `WORKER_COUNT` | 幾個 Suno 帳號。每個帳號一個 profile 目錄（`profiles`、`profiles-1`…），派工輪流攤平配額 | `1` |
+| `DISPATCH_MODE` | 派工模式。`credits`＝挑剩餘點數最多的帳號（預設）；`round-robin`＝單純輪流 | `credits` |
 | `IDLE_SHUTDOWN_MINUTES` | 瀏覽器閒置這麼久就關掉省記憶體，`0` 表示永不關 | `10` |
 | `AUDIO_RETENTION_DAYS` | 音檔保留天數，超過的在下次生成時順手清掉，也可以在管理台的歷史頁按鈕手動清 | `14` |
 | `ADMIN_USERNAME` | 管理台帳號 | `admin` |
@@ -265,6 +266,7 @@ V1 沒有瀏覽器自動自癒：建議外部監控定期打 `/api/health`，看
 
 - **一定要用真的 Google Chrome，不能用 Playwright 內建的 Chromium。** Suno 在按下 Create 時會先打 `POST /api/c/check` 問要不要驗證碼。用 Playwright 內建 Chromium 時它回 `{"required": true}` 並跳出 Cloudflare Turnstile 的互動式勾選框，程式化點擊不被接受，生成請求送不出去；改用真 Chrome（本服務自己啟動、再用 CDP 接上）之後同一個端點回 `{"required": false}`，生成正常送出。`channel="chrome"` 讓 Playwright 去啟動也不行，必須自己起、自己接。實測記錄見 `docs/acceptance-2026-08-20.md` 第四、五節。
 - **自動化 Suno 網頁違反 Suno 服務條款，帳號有被封的風險。** 這是明講的取捨，要不要用請自己評估。
+- 派工預設「點數優先」：挑剩餘點數最多的帳號。帳號的月配額常常不一樣（實測 40／100／300／300），單純輪流會讓點數少的先見底、變成失敗來源。點數要跑過一單才觀測得到，還沒有數字的帳號用輪流去發掘；點數一樣多的帳號之間也輪流。
 - 併行度等於 `WORKER_COUNT`。**同一個帳號一次只跑一單**：一個 worker 只有一個瀏覽器分頁，而輪詢期間會定期 reload 它，兩單並行會互相把頁面導覽掉。不同帳號之間則是真的並行。
 - 瀏覽器隨用隨開：派工到某個帳號才啟動它的 Chrome，閒置 `IDLE_SHUTDOWN_MINUTES` 後關掉。每單多約 10 到 15 秒的啟動時間，換掉常駐四個 Chrome 的近 5 GB 記憶體。
 - 一單通常 2 到 4 分鐘，job timeout 預設 600 秒。
@@ -281,7 +283,7 @@ uv sync --extra dev
 uv run pytest -q
 ```
 
-73 個測試，另有 1 個標了 `browser` 的測試預設跳過（那個要真的開 Chromium）。瀏覽器層在單元測試裡用假 worker 注入，不碰網路。
+79 個測試，另有 1 個標了 `browser` 的測試預設跳過（那個要真的開 Chromium）。瀏覽器層在單元測試裡用假 worker 注入，不碰網路。
 
 ## 授權
 

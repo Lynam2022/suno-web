@@ -61,6 +61,8 @@ class Job:
 
 # 保留幾筆 job 記錄。管理台歷史頁只看 200 筆，留 1000 筆已經很寬鬆。
 _KEEP_JOBS = 1000
+# 一單要多少點（實測：一單 10 點、出 4 首）
+CREDITS_PER_JOB = 10
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -197,7 +199,9 @@ class JobQueue:
 
     def __init__(self, store: JobStore, runner: Runner | list[Runner], *,
                  max_size: int, default_timeout: int,
-                 generated_dir: str, retention_days: int) -> None:
+                 generated_dir: str, retention_days: int,
+                 credits_of: Callable[[int], int | None] | None = None,
+                 dispatch_mode: str = "credits") -> None:
         self._store = store
         self._runners: list[Runner] = (list(runner) if isinstance(runner, list)
                                        else [runner])
@@ -208,6 +212,8 @@ class JobQueue:
             asyncio.Queue(maxsize=per_queue) for _ in range(n)]
         self._busy = [False] * n
         self._rr = 0
+        self._credits_of = credits_of
+        self._dispatch_mode = dispatch_mode
         self._default_timeout = default_timeout
         self._generated_dir = generated_dir
         self._retention_days = retention_days
@@ -220,17 +226,49 @@ class JobQueue:
     def queue_size(self) -> int:
         return sum(q.qsize() for q in self._queues)
 
-    def _pick(self) -> int:
-        """輪流挑一個 worker：優先閒著的，都在忙就挑佇列最短的。"""
+    def _idle_candidates(self) -> list[int]:
+        return [i for i in range(len(self._queues))
+                if not self._busy[i] and not self._queues[i].full()]
+
+    def _next_by_rotation(self, candidates: list[int]) -> int:
         n = len(self._queues)
         for offset in range(n):
             idx = (self._rr + offset) % n
-            if not self._busy[idx] and not self._queues[idx].full():
+            if idx in candidates:
                 self._rr = (idx + 1) % n
                 return idx
-        idx = min(range(n), key=lambda i: self._queues[i].qsize())
-        self._rr = (idx + 1) % n
-        return idx
+        return candidates[0]
+
+    def _pick(self) -> int:
+        """挑一個 worker。
+
+        預設「點數優先」：帳號的月配額常常不一樣（實測 40／100／300／300），
+        單純輪流會讓點數少的先見底、變成失敗來源。挑剩餘點數最多的，四個
+        帳號才會一起接近底線。
+
+        點數要跑過一單才觀測得到，所以還沒有數字的帳號用輪流去發掘；已知
+        點數不足一單（少於 10 點）的帳號會被讓到未知帳號後面。
+        都在忙時排進最短的佇列。
+        """
+        candidates = self._idle_candidates()
+        if not candidates:
+            idx = min(range(len(self._queues)), key=lambda i: self._queues[i].qsize())
+            self._rr = (idx + 1) % len(self._queues)
+            return idx
+        if self._dispatch_mode != "credits" or self._credits_of is None:
+            return self._next_by_rotation(candidates)
+
+        known = [(self._credits_of(i), i) for i in candidates]
+        known = [(c, i) for c, i in known if isinstance(c, int)]
+        unknown = [i for i in candidates
+                   if not isinstance(self._credits_of(i), int)]
+        if known:
+            best_credits = max(c for c, _ in known)
+            if best_credits >= CREDITS_PER_JOB or not unknown:
+                # 點數一樣多的帳號之間再輪流，免得永遠只用同一個
+                top = [i for c, i in known if c == best_credits]
+                return self._next_by_rotation(top)
+        return self._next_by_rotation(unknown or candidates)
 
     def submit(self, params: dict) -> Job:
         if all(q.full() for q in self._queues):

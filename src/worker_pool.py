@@ -103,6 +103,13 @@ class WorkerPool:
         """交給 JobQueue 的執行函式，一個 worker 一支。"""
         return [w.run for w in self.workers]
 
+    def credits_of(self, index: int) -> int | None:
+        """那個帳號目前觀測到的剩餘點數，給 JobQueue 挑帳號用。"""
+        if 0 <= index < len(self.workers):
+            r = self.workers[index]._runner
+            return r.last_credits if r else None
+        return None
+
     def infos(self) -> list[dict[str, Any]]:
         return [w.info() for w in self.workers]
 

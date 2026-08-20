@@ -116,3 +116,42 @@ def test_queue_full_across_all_workers(tmp_path):
     queue.submit({})
     with pytest.raises(QueueFullError):
         queue.submit({})
+
+
+def _queue_with_credits(tmp_path, credits, mode="credits"):
+    async def runner(job):
+        return [Clip(id="c", status="complete", downloadable=True,
+                     filename="c.mp3")]
+
+    store = JobStore(str(tmp_path / "jobs.db"))
+    return JobQueue(store, [runner] * len(credits), max_size=16,
+                    default_timeout=5, generated_dir=str(tmp_path / "g"),
+                    retention_days=14, credits_of=lambda i: credits[i],
+                    dispatch_mode=mode)
+
+
+def test_credit_first_picks_the_richest_account(tmp_path):
+    """帳號點數不平均時要挑最多的,不然點數少的會先見底變成失敗來源。"""
+    queue = _queue_with_credits(tmp_path, [40, 100, 300, 300])
+    # 300 的有兩個,先給索引小的,再輪到另一個(同分也要攤平)
+    assert queue.submit({}).params["worker"] == 2
+    assert queue.submit({}).params["worker"] == 3
+    assert queue.submit({}).params["worker"] == 2
+
+
+def test_unknown_credits_are_discovered_by_rotation(tmp_path):
+    """點數要跑過一單才讀得到,還沒有數字的帳號用輪流去發掘。"""
+    queue = _queue_with_credits(tmp_path, [None, None, None, None])
+    assert [queue.submit({}).params["worker"] for _ in range(4)] == [0, 1, 2, 3]
+
+
+def test_account_too_low_to_generate_yields_to_unknown(tmp_path):
+    """已知點數不足一單的帳號,要讓給還沒探過的帳號。"""
+    queue = _queue_with_credits(tmp_path, [5, None])
+    assert queue.submit({}).params["worker"] == 1
+
+
+def test_round_robin_mode_ignores_credits(tmp_path):
+    """逃生閥:DISPATCH_MODE=round-robin 時完全不看點數。"""
+    queue = _queue_with_credits(tmp_path, [10, 300], mode="round-robin")
+    assert [queue.submit({}).params["worker"] for _ in range(2)] == [0, 1]
