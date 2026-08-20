@@ -60,8 +60,9 @@ def test_wrong_password_does_not_grant_session(client):
 def test_login_then_pages_render(client):
     login(client)
     body = client.get("/admin").text
-    assert "服務狀態" in body and "剩餘點數" in body and "90" in body
-    assert "歷史" in client.get("/admin/history").text
+    assert "剩餘點數" in body and "90" in body
+    assert "近期 job" in client.get("/admin/history").text
+    assert "送一單" in client.get("/admin/test").text
 
 
 def test_issue_key_then_it_authorizes_the_api(client):

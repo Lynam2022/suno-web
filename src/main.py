@@ -133,9 +133,20 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
             raise HTTPException(status_code=404, detail="not_found")
         return FileResponse(path)
 
+    def admin_submit(*, prompt: str, lyrics: str, style: str, title: str,
+                     instrumental: bool, key_name: str) -> str:
+        """管理台測試頁送單：走跟 API 完全一樣的 build_params 與佇列，
+        才不會出現「管理台測得過、API 卻不行」這種假象。"""
+        req = GenerateRequest(prompt=prompt, lyrics=lyrics, style=style,
+                              title=title, instrumental=instrumental)
+        params = build_params(req, settings.default_timeout)
+        params["api_key_name"] = key_name
+        return queue.submit(params).id
+
     app.include_router(create_admin_router(
         settings=settings, store=store, queue=queue,
-        started_at=started_at, health_extra=health_extra))
+        started_at=started_at, health_extra=health_extra,
+        submit=admin_submit))
 
     @app.get("/api/health")
     async def health() -> dict:
