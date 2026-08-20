@@ -1,0 +1,152 @@
+{
+ "clips": [
+  {
+   "status": "complete",
+   "title": "Fake Song One",
+   "play_count": 0,
+   "upvote_count": 0,
+   "allow_comments": true,
+   "is_verified": false,
+   "id": "aaaaaaaa-0000-0000-0000-000000000001",
+   "entity_type": "song_schema",
+   "video_url": "",
+   "audio_url": "https://example.com/fake1.mp3",
+   "media_urls": [
+    {
+     "url": "https://example.com/fake1.m4a",
+     "content_type": "m4a-opus",
+     "delivery": "progressive",
+     "encoding": "1.0.0"
+    },
+    {
+     "url": "https://example.com/fake1.mp3",
+     "content_type": "mp3",
+     "delivery": "progressive"
+    }
+   ],
+   "image_url": "https://example.com/fake1.jpeg",
+   "image_large_url": "https://example.com/fake1_large.jpeg",
+   "major_model_version": "v4.5-all",
+   "model_name": "chirp-auk",
+   "metadata": {
+    "tags": "placeholder style tags for a fake ambient track",
+    "prompt": "",
+    "type": "gen",
+    "duration": 264.96,
+    "refund_credits": false,
+    "stream": true,
+    "make_instrumental": true,
+    "can_remix": true,
+    "is_remix": false,
+    "priority": 0,
+    "has_stem": false,
+    "uses_latest_model": false,
+    "image_config": {
+     "use_image_config_template": true,
+     "id": "black_and_white_photograph",
+     "default_cover_style": "brand_refresh"
+    },
+    "is_mumble": false
+   },
+   "is_liked": false,
+   "is_trashed": false,
+   "is_hidden": false,
+   "created_at": "2026-01-01T00:00:00.000Z",
+   "is_public": false,
+   "is_persona_root": false,
+   "is_following_creator": false,
+   "albums": [],
+   "explicit": false,
+   "comment_count": 0,
+   "flag_count": 0,
+   "display_tags": "ambient, lo-fi, drone",
+   "is_contest_clip": false,
+   "has_hook": false,
+   "batch_index": 1,
+   "action_config": {
+    "actions": [
+     {"action_type": "add_to_playlist", "disabled": false, "visible": true},
+     {"action_type": "like_song", "disabled": false, "visible": true},
+     {"action_type": "share_song", "disabled": false, "visible": true},
+     {"action_type": "download_song", "disabled": false, "visible": true},
+     {"action_type": "delete_song", "disabled": false, "visible": true}
+    ]
+   }
+  },
+  {
+   "status": "complete",
+   "title": "Fake Song Two",
+   "play_count": 0,
+   "upvote_count": 0,
+   "allow_comments": true,
+   "is_verified": false,
+   "id": "aaaaaaaa-0000-0000-0000-000000000002",
+   "entity_type": "song_schema",
+   "video_url": "",
+   "audio_url": "https://example.com/fake2.mp3",
+   "media_urls": [
+    {
+     "url": "https://example.com/fake2.m4a",
+     "content_type": "m4a-opus",
+     "delivery": "progressive",
+     "encoding": "1.0.0"
+    },
+    {
+     "url": "https://example.com/fake2.mp3",
+     "content_type": "mp3",
+     "delivery": "progressive"
+    }
+   ],
+   "image_url": "https://example.com/fake2.jpeg",
+   "image_large_url": "https://example.com/fake2_large.jpeg",
+   "major_model_version": "v4.5-all",
+   "model_name": "chirp-auk",
+   "metadata": {
+    "tags": "placeholder style tags for a fake piano track",
+    "prompt": "",
+    "type": "gen",
+    "duration": 184.92,
+    "refund_credits": false,
+    "stream": true,
+    "make_instrumental": true,
+    "can_remix": true,
+    "is_remix": false,
+    "priority": 0,
+    "has_stem": false,
+    "uses_latest_model": false,
+    "image_config": {
+     "use_image_config_template": true,
+     "id": "camcorder",
+     "default_cover_style": "brand_refresh"
+    },
+    "is_mumble": false
+   },
+   "is_liked": false,
+   "is_trashed": false,
+   "is_hidden": false,
+   "created_at": "2026-01-01T00:05:00.000Z",
+   "is_public": false,
+   "is_persona_root": false,
+   "is_following_creator": false,
+   "albums": [],
+   "explicit": false,
+   "comment_count": 0,
+   "flag_count": 0,
+   "display_tags": "neoclassical, ambient",
+   "is_contest_clip": false,
+   "has_hook": false,
+   "batch_index": 1,
+   "action_config": {
+    "actions": [
+     {"action_type": "add_to_playlist", "disabled": false, "visible": true},
+     {"action_type": "like_song", "disabled": false, "visible": true},
+     {"action_type": "share_song", "disabled": false, "visible": true},
+     {"action_type": "download_song", "disabled": false, "visible": true},
+     {"action_type": "delete_song", "disabled": false, "visible": true}
+    ]
+   }
+  }
+ ],
+ "next_cursor": null,
+ "has_more": false
+}
