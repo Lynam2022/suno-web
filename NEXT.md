@@ -11,7 +11,6 @@
 - [ ] 帳號 0 只剩 20 點（2 單），用完之後派工會自動跳過它。要補就再開一個免費帳號，`ssh -X` 到 .11 跑 `uv run suno-web login -w 4`，記得**真人手動生一單**開通（推銷彈窗 + `/api/c/check` 的 `required:true` 都靠這一步解掉），然後把 `.env` 的 `WORKER_COUNT` 加一並重啟。
 - [ ] 每月配額何時重置沒實測過。`monthly_usage` 歸零的時間點若不是月初，派工的「還能生幾單」估算會失準一天。下個月初對一次 `/api/health` 的 credits 就知道。
 - [ ] `LOGGED_OUT_MARKER` 還沒在真的登出畫面上正面驗證過。登入態哪天過期時，順手確認 job 正確回的是 `not_logged_in`，而非含糊的 `submit_failed`。
-- [ ] 金絲雀每天 08:00 由 .11 的 crontab 跑（`scripts/canary.py`），壞了會開一張帶 `canary` label 的 issue。第一次真的觸發時要確認 issue 開得出來（`gh` 在那台的認證還沒驗過）。
 - [ ] `.11` 的 Chrome 是把 deb 解在家目錄的，所以 `.env` 設了 `CHROME_NO_SANDBOX=true`。哪天用 apt 正式裝了 Chrome，把那行拿掉恢復沙箱。
 - [ ] 音檔目前留 14 天（`AUDIO_RETENTION_DAYS`）。四帳號跑滿一個月約 260 首、每首 2 到 4 MB，磁碟用量到時候看一眼再決定要不要縮短。
 
