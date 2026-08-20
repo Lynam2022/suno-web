@@ -27,7 +27,15 @@ uv sync --extra dev
 uv run suno-web login
 ```
 
-會開一個有頭瀏覽器（需要桌面環境或 X forwarding），登入 Suno 帳號、確認看得到 Create 頁面之後回終端機按 Enter 關閉。登入態存在 `~/.suno-web/profiles/`，之後不必再登入；過期了就重跑同一個指令。
+會開一個普通的 Chrome 視窗（需要桌面環境或 X forwarding）。在裡面登入 Suno，確認看得到 Create 頁面，**把視窗關掉**，指令會自動驗證登入態並印出剩餘點數。登入態存在 `~/.suno-web/profiles/`，之後不必再登入；過期了就重跑同一個指令。
+
+這個視窗刻意**不接 CDP**：Suno 的 Clerk 在登入流程掛了 Cloudflare Turnstile，被程式驅動的瀏覽器過不了那一關（`auth.suno.com/v1/client/verify` 會收到 `captcha_error=600010`，畫面變成 Initialization Error）。沒被驅動的視窗就沒這個問題。
+
+多個帳號用 `-w`：
+
+```bash
+uv run suno-web login -w 1    # 第二個帳號，profile 存在 ~/.suno-web/profiles-1/
+```
 
 ## CLI
 
@@ -270,7 +278,7 @@ uv sync --extra dev
 uv run pytest -q
 ```
 
-65 個測試，另有 1 個標了 `browser` 的測試預設跳過（那個要真的開 Chromium）。瀏覽器層在單元測試裡用假 worker 注入，不碰網路。
+67 個測試，另有 1 個標了 `browser` 的測試預設跳過（那個要真的開 Chromium）。瀏覽器層在單元測試裡用假 worker 注入，不碰網路。
 
 ## 授權
 

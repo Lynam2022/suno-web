@@ -73,3 +73,10 @@ class Settings:
 
 
 settings = Settings()
+
+
+def get_worker_profile_dir(worker_id: int) -> str:
+    """第幾個帳號用哪個 profile 目錄。命名沿用 gemini-web：worker 0 用
+    profiles/，之後是 profiles-1、profiles-2……"""
+    base = Path(settings.profile_dir)
+    return str(base) if worker_id == 0 else str(base.parent / f"{base.name}-{worker_id}")

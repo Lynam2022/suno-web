@@ -42,3 +42,18 @@ def test_install_puts_slash_commands_where_agents_look(tmp_path, monkeypatch, ca
     assert (tmp_path / ".claude/commands/suno-web/suno.md").is_file()
     assert (tmp_path / ".gemini/commands/suno-web/suno.toml").is_file()
     assert "instrumental" in (tmp_path / ".claude/commands/suno-web/suno.md").read_text()
+
+
+def test_login_takes_a_worker_number():
+    args = build_parser().parse_args(["login", "-w", "2"])
+    assert args.cmd == "login" and args.worker == 2
+    assert build_parser().parse_args(["login"]).worker == 0
+
+
+def test_worker_profile_dir_naming(monkeypatch, tmp_path):
+    """命名沿用 gemini-web:0 用 profiles/,之後是 profiles-N。"""
+    from src import config
+    monkeypatch.setattr(config.settings, "profile_dir", str(tmp_path / "profiles"))
+    assert config.get_worker_profile_dir(0) == str(tmp_path / "profiles")
+    assert config.get_worker_profile_dir(1) == str(tmp_path / "profiles-1")
+    assert config.get_worker_profile_dir(3) == str(tmp_path / "profiles-3")

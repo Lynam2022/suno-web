@@ -22,7 +22,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="suno-web", description="Suno 網頁版自動化")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("install", help="安裝 Playwright Chromium")
-    sub.add_parser("login", help="開瀏覽器人工登入 Suno")
+    p_login = sub.add_parser("login", help="開瀏覽器人工登入 Suno")
+    p_login.add_argument("-w", "--worker", type=int, default=0,
+                         help="第幾個帳號，預設 0")
     sub.add_parser("serve", help="啟動 HTTP API")
     p_health = sub.add_parser("health", help="檢查服務狀態")
     p_health.add_argument("--server", default=_default_server())
@@ -81,18 +83,72 @@ def _install() -> None:
     sys.exit(1)
 
 
-async def _login() -> None:
-    from .browser import BrowserManager
-    from .config import settings
+def _login(worker: int = 0) -> None:
+    """開一個普通的 Chrome 讓人登入，全程不接 CDP。
 
-    bm = BrowserManager(headless=False)
-    await bm.start()
-    await bm.page.goto(settings.suno_url)
-    print(f"\n瀏覽器已開啟（profile: {settings.profile_dir}）")
-    print("請登入 Suno 帳號，確認看得到 Create 頁面後，回到終端機按 Enter 關閉...")
-    await asyncio.get_event_loop().run_in_executor(None, input)
-    await bm.stop()
-    print("登入狀態已儲存。")
+    為什麼不用 BrowserManager：那支會帶 --remote-debugging-port 再讓
+    Playwright 接上去，而 Suno 的 Clerk 在登入流程掛了 Cloudflare Turnstile，
+    被程式驅動的瀏覽器過不了那一關（實測 auth.suno.com/v1/client/verify 會
+    收到 captcha_error=600010，畫面就變成 Initialization Error）。
+
+    這不是 Google 的問題：Google 的登入頁在自動化瀏覽器裡照樣載入，所以
+    gemini-web 那種只走 Google 的服務不受影響。登入這一步本來就不需要自動化，
+    開起來、等人登完、等視窗關掉就好；服務要用時再接 CDP。
+    """
+    from .config import get_worker_profile_dir, settings
+
+    chrome = shutil.which(settings.chrome_binary)
+    if not chrome:
+        print(f"找不到 Chrome 執行檔「{settings.chrome_binary}」，先跑 suno-web install")
+        sys.exit(1)
+    profile = Path(get_worker_profile_dir(worker))
+    profile.mkdir(parents=True, exist_ok=True)
+
+    print(f"帳號 {worker} 的 profile：{profile}")
+    print("瀏覽器開好了。請在裡面登入 Suno（Google 或 email 都可以，這個視窗"
+          "沒有被程式驅動）。")
+    print("登完、確認看得到 Create 頁面之後，**把瀏覽器視窗關掉**，這裡就會"
+          "自動驗證。不要在這裡按 Ctrl-C，那樣 cookie 可能沒寫回去。")
+    proc = subprocess.Popen(
+        [chrome, f"--user-data-dir={profile}", "--no-first-run",
+         "--no-default-browser-check", settings.suno_url],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    proc.wait()
+    print("視窗關掉了，驗證登入態……")
+    asyncio.run(_verify_login(worker))
+
+
+async def _verify_login(worker: int) -> None:
+    """用無頭瀏覽器確認那份 profile 真的是登入狀態，順便讀點數。"""
+    from .browser import BrowserManager
+    from .config import get_worker_profile_dir, settings
+    from .suno import SunoRunner
+
+    bm = BrowserManager(headless=True,
+                        profile_dir=get_worker_profile_dir(worker))
+    try:
+        await bm.start()
+    except Exception as e:
+        print(f"驗證時瀏覽器起不來：{e}")
+        return
+    runner = SunoRunner(bm, settings)
+    try:
+        runner._install_sniffer(bm.page)
+        try:
+            await runner._ensure_on_create_page(bm.page)
+        except Exception as e:
+            print(f"看起來還沒登入成功：{e}")
+            return
+        for _ in range(10):
+            await bm.page.wait_for_timeout(2000)
+            if runner.last_credits is not None:
+                break
+        credits = runner.last_credits
+        print(f"帳號 {worker} 登入成功。"
+              + (f"剩餘點數 {credits}（可生 {credits // 10} 單）"
+                 if credits is not None else "點數讀不到，跑一單之後才會有值"))
+    finally:
+        await bm.stop()
 
 
 def _serve() -> None:
@@ -208,7 +264,7 @@ def main() -> None:
     if args.cmd == "install":
         _install()
     elif args.cmd == "login":
-        asyncio.run(_login())
+        _login(args.worker)
     elif args.cmd == "serve":
         _serve()
     elif args.cmd == "health":
