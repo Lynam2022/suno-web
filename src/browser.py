@@ -29,10 +29,10 @@ class BrowserManager:
             headless=self._headless,
             locale="zh-TW",
             timezone_id=settings.stealth_timezone,
-            user_agent=(
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-            ),
+            # 不覆寫 user_agent：2026-08-20 實測，偽裝成 Chrome/131 會讓
+            # Cloudflare Turnstile 的心跳連續失敗（auth.suno.com/v1/client/verify
+            # 收到 captcha_error=600010），因為 UA 字串與瀏覽器真實指紋對不起來。
+            # 拿掉偽裝後那些失敗歸零。用瀏覽器自己的 UA 就好。
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
