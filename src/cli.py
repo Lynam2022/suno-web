@@ -152,6 +152,9 @@ def _generate(args) -> None:
             continue
         audio = httpx.get(f"{base}{clip['audio_url']}", headers=headers,
                           timeout=120)
+        if audio.status_code != 200:
+            print(f"  下載失敗（HTTP {audio.status_code}）：{clip.get('title') or clip['id']}")
+            continue
         dest = out / f"{clip['id']}.mp3"
         dest.write_bytes(audio.content)
         print(f"  已存：{dest}（{clip.get('duration')}s）")

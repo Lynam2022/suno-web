@@ -108,15 +108,26 @@ class SunoRunner:
         self._settings = settings
         self._clips: dict[str, RawClip] = {}
         self._sniffing = False
+        self._sniffer_tasks: set = set()
         self.logged_in: bool | None = None
         self.last_credits: int | None = None
 
     # ---- 側錄 ----
 
     def _install_sniffer(self, page: Page) -> None:
+        """asyncio.create_task() 建立的 task 若沒有任何地方保留參照，事件迴圈
+        只認一個弱參照，垃圾回收有機會在 task 跑到一半時就把它清掉、任務
+        中止但不拋錯，等於側錄悄悄漏資料。用 self._sniffer_tasks 這個 set
+        保留強參照，跑完（或出例外）用 done-callback 自行從 set 移除。"""
         if self._sniffing:
             return
-        page.on("response", lambda r: asyncio.create_task(self._on_response(r)))
+
+        def _handle(response) -> None:
+            task = asyncio.create_task(self._on_response(response))
+            self._sniffer_tasks.add(task)
+            task.add_done_callback(self._sniffer_tasks.discard)
+
+        page.on("response", _handle)
         self._sniffing = True
 
     async def _on_response(self, response) -> None:

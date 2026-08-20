@@ -17,11 +17,10 @@ User=${USER}
 WorkingDirectory=${WORK_DIR}
 # 啟動前殺掉其他佔用 profile 的 process（避免搶 session）
 ExecStartPre=/usr/bin/bash -c 'pkill -f "[s]uno-web serve" || true; pkill -f "[c]hrome.*suno-web/profiles" || true; sleep 1'
-ExecStart=${WORK_DIR}/.venv/bin/suno-web serve
+ExecStart=/usr/bin/env HEADLESS=true ${WORK_DIR}/.venv/bin/suno-web serve
 Restart=on-failure
 RestartSec=10
 EnvironmentFile=-${WORK_DIR}/.env
-Environment=HEADLESS=true
 Environment=HOME=${USER_HOME}
 Environment=PLAYWRIGHT_BROWSERS_PATH=${USER_HOME}/.cache/ms-playwright
 

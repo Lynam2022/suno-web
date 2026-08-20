@@ -118,6 +118,21 @@ class JobStore:
             created_at=row[6], started_at=row[7], finished_at=row[8],
         )
 
+    def fail_unfinished(self, message: str) -> int:
+        """服務重啟後，把所有還沒跑到終態的 job 一律標記失敗。Queue 是純記憶體
+        佇列，重啟後這些 job 永遠不會再被排到，不處理的話 client 會永遠輪詢
+        不到終態。回傳受影響的筆數。"""
+        now = time.time()
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE jobs SET status='error', error='browser_error', "
+                "error_message=?, finished_at=? "
+                "WHERE status NOT IN ('done','error')",
+                (message, now),
+            )
+            self._conn.commit()
+            return cur.rowcount
+
 
 class GenerationError(Exception):
     """runner 拋的可分類錯誤，code 會進 job.error"""
@@ -162,10 +177,11 @@ class JobQueue:
     async def worker_loop(self) -> None:
         while True:
             job_id = await self._queue.get()
-            job = self._store.get(job_id)
-            if job is None:
-                continue
+            job: Job | None = None
             try:
+                job = self._store.get(job_id)
+                if job is None:
+                    continue
                 job.status = "generating"
                 job.started_at = time.time()
                 self._store.save(job)
@@ -191,14 +207,19 @@ class JobQueue:
                 job.finished_at = time.time()
                 self._store.save(job)
             except Exception as e:
-                job.status = "error"
-                job.error = "browser_error"
-                job.error_message = str(e)[:500]
-                job.finished_at = time.time()
-                try:
-                    self._store.save(job)
-                except Exception:
-                    pass
+                # job 可能連 self._store.get() 都還沒成功（例如暫時性 sqlite
+                # 錯誤），此時沒有 job 物件可以標記失敗，只能放過這一筆、讓
+                # 迴圈繼續存活等下一筆，不能讓 worker coroutine 整個掛掉
+                # （否則佇列從此永久卡死，需要重啟服務才能恢復）。
+                if job is not None:
+                    job.status = "error"
+                    job.error = "browser_error"
+                    job.error_message = str(e)[:500]
+                    job.finished_at = time.time()
+                    try:
+                        self._store.save(job)
+                    except Exception:
+                        pass
 
 
 def cleanup_expired(generated_dir: str, retention_days: int) -> None:

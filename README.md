@@ -172,7 +172,7 @@ sudo bash scripts/install-service.sh
 
 - `ExecStart` 指向 repo 內的 `.venv/bin/suno-web serve`，所以同一台機器要先跑過 `uv sync`。
 - `ExecStartPre` 先 `pkill` 掉其他佔用同一份 profile 的 process，避免兩個瀏覽器搶同一個 session。
-- `EnvironmentFile` 讀 repo 根目錄的 `.env`，另外硬寫 `HEADLESS=true`。
+- `EnvironmentFile` 讀 repo 根目錄的 `.env`。部署時 `HEADLESS` 由 `ExecStart` 強制為 `true`，`.env` 設了也不會蓋掉。
 - `PLAYWRIGHT_BROWSERS_PATH` 指到該使用者的 `~/.cache/ms-playwright`。
 
 部署前先在那台機器上跑過 `suno-web login`，profile 才有登入態，這一步需要桌面環境或 X forwarding。看 log：
@@ -180,6 +180,8 @@ sudo bash scripts/install-service.sh
 ```bash
 sudo journalctl -u suno-web-api -f
 ```
+
+V1 沒有瀏覽器自動自癒：建議外部監控定期打 `/api/health`，看到 `browser_alive: false` 就 `systemctl restart suno-web-api`。
 
 ## 帳號前提
 
@@ -210,7 +212,7 @@ uv sync --extra dev
 uv run pytest -q
 ```
 
-45 個測試，另有 1 個標了 `browser` 的測試預設跳過（那個要真的開 Chromium）。瀏覽器層在單元測試裡用假 worker 注入，不碰網路。
+49 個測試，另有 1 個標了 `browser` 的測試預設跳過（那個要真的開 Chromium）。瀏覽器層在單元測試裡用假 worker 注入，不碰網路。
 
 ## 授權
 

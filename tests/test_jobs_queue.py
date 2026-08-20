@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 
 import pytest
 
@@ -131,5 +132,34 @@ async def test_worker_survives_bad_timeout_param(tmp_path):
     good_done = await run_until_finished(store, queue, good_job.id, seconds=3.0)
 
     # Good job should complete successfully
+    assert good_done.status == "done"
+    assert good_done.clips[0].filename == "c1.mp3"
+
+
+async def test_worker_survives_store_get_error(tmp_path):
+    """Regression: store.get() 炸掉（例如暫時性 sqlite 錯誤）不該讓
+    worker coroutine 整個掛掉，下一筆 job 還是要能正常跑完。"""
+    async def runner(job):
+        return [Clip(id="c1", status="complete", downloadable=True, filename="c1.mp3")]
+
+    store, queue = make_queue(tmp_path, runner)
+    real_get = store.get
+    broken_ids: set[str] = set()
+
+    def flaky_get(job_id):
+        if job_id in broken_ids:
+            broken_ids.discard(job_id)
+            raise sqlite3.OperationalError("database is locked")
+        return real_get(job_id)
+
+    store.get = flaky_get
+
+    bad_job = queue.submit({"mode": "simple"})
+    broken_ids.add(bad_job.id)
+    # 第一筆 job 因為 store.get 炸掉，這裡沒有 job 物件可以標記失敗，
+    # 只確認迴圈存活、第二筆能正常跑完即可。
+    good_job = queue.submit({"mode": "simple"})
+    good_done = await run_until_finished(store, queue, good_job.id, seconds=3.0)
+
     assert good_done.status == "done"
     assert good_done.clips[0].filename == "c1.mp3"

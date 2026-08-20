@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .config import Settings
 from .jobs import JobQueue, JobStore, QueueFullError
@@ -27,7 +27,7 @@ class GenerateRequest(BaseModel):
     style: str | None = None
     title: str | None = None
     instrumental: bool = False
-    timeout: int | None = None
+    timeout: int | None = Field(default=None, ge=1)
 
 
 def build_params(req: GenerateRequest, default_timeout: int) -> dict[str, Any]:
@@ -40,6 +40,11 @@ def build_params(req: GenerateRequest, default_timeout: int) -> dict[str, Any]:
         raise HTTPException(
             status_code=400,
             detail="invalid_request: prompt 或 lyrics/style 至少要有一個",
+        )
+    if lyrics and req.instrumental:
+        raise HTTPException(
+            status_code=400,
+            detail="invalid_request: instrumental 與 lyrics 不能同時給（純音樂沒有歌詞欄）",
         )
     return {
         "mode": "custom" if custom else "simple",
@@ -56,6 +61,9 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        # 服務重啟前卡在 queued/generating 的 job 永遠不會再被排到（queue 是
+        # 純記憶體佇列），不作廢的話 client 會永遠輪詢不到終態。
+        store.fail_unfinished("服務重啟,重啟前未完成的 job 一律作廢")
         if browser is not None:
             await browser.start()
         worker = asyncio.create_task(queue.worker_loop())
@@ -73,7 +81,7 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
             raise HTTPException(status_code=403, detail="invalid_api_key")
 
     @app.post("/api/generate")
-    def generate(req: GenerateRequest, _: None = Depends(require_key)) -> dict:
+    async def generate(req: GenerateRequest, _: None = Depends(require_key)) -> dict:
         params = build_params(req, settings.default_timeout)
         try:
             job = queue.submit(params)
@@ -82,15 +90,15 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
         return {"job_id": job.id, "status": job.status}
 
     @app.get("/api/jobs/{job_id}")
-    def get_job(job_id: str, _: None = Depends(require_key)) -> dict:
+    async def get_job(job_id: str, _: None = Depends(require_key)) -> dict:
         job = store.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="not_found")
         return job.to_api()
 
     @app.get("/api/jobs/{job_id}/files/{name}")
-    def get_file(job_id: str, name: str,
-                 _: None = Depends(require_key)) -> FileResponse:
+    async def get_file(job_id: str, name: str,
+                       _: None = Depends(require_key)) -> FileResponse:
         if not _JOB_ID_RE.match(job_id) or not _SAFE_NAME_RE.match(name):
             raise HTTPException(status_code=404, detail="not_found")
         path = Path(settings.generated_dir) / job_id / name
@@ -99,7 +107,7 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
         return FileResponse(path)
 
     @app.get("/api/health")
-    def health() -> dict:
+    async def health() -> dict:
         info: dict[str, Any] = {
             "status": "ok",
             "queue_size": queue.queue_size,

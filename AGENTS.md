@@ -99,7 +99,7 @@ curl -s -H "x-api-key: YOUR_KEY" \
 - Simple 模式一句話就夠（`prompt`）。要控制歌詞內容才走 Custom（`lyrics`、`style`、`title`）。
 - 兩種模式二選一：只要帶了 `lyrics` 或 `style`，`prompt` 就會被忽略。
 - 不要把使用者的原話直接轉送。先理解意圖，再擴寫成有主體、樂器、節奏、情緒的描述。例如使用者說「做一首寫程式的背景音樂」，送出去的可以是 `a mellow lo-fi hip hop instrumental, soft rhodes piano, brushed drums, late-night focus mood`。
-- `instrumental: true` 是純音樂。Custom 模式底下這個開關會切換 Suno 的 Lyrics mode，開了之後歌詞框整個從 DOM 消失，所以同一單再帶 `lyrics` 會以 `submit_failed` 收場。要純音樂就別給歌詞。
+- `instrumental: true` 是純音樂。Custom 模式底下這個開關會切換 Suno 的 Lyrics mode，開了之後歌詞框整個從 DOM 消失，所以同一單再帶非空的 `lyrics` 會在 API 這層直接被擋下來，回 HTTP 400 `invalid_request`，不會真的送進瀏覽器流程。要純音樂就別給歌詞。
 - 模型不可選，固定用頁面預設的 v4.5-all。送 `model` 欄位沒有作用。
 
 ## 五、介面設計規範

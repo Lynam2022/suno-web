@@ -59,8 +59,10 @@ def test_custom_mode_params(tmp_path, monkeypatch):
 
     client, _ = make_client(tmp_path, monkeypatch, runner=runner)
     with client:
+        # style + instrumental（沒帶 lyrics）：合法組合，同時驗 instrumental
+        # 能一路傳到 job.params。
         resp = client.post("/api/generate", json={
-            "prompt": "會被忽略", "lyrics": "詞", "style": "lo-fi",
+            "prompt": "會被忽略", "style": "lo-fi",
             "title": "夜", "instrumental": True})
         poll_done(client, resp.json()["job_id"])
     assert captured["mode"] == "custom"
@@ -106,6 +108,41 @@ def test_file_endpoint_serves_and_guards(tmp_path, monkeypatch):
         assert ok.status_code == 200
         assert client.get(f"/api/jobs/{job.id}/files/..%2Fsecret").status_code == 404
         assert client.get(f"/api/jobs/{job.id}/files/none.mp3").status_code == 404
+
+
+def test_timeout_zero_is_422(tmp_path, monkeypatch):
+    client, _ = make_client(tmp_path, monkeypatch)
+    with client:
+        resp = client.post("/api/generate", json={"prompt": "x", "timeout": 0})
+        assert resp.status_code == 422
+
+
+def test_lyrics_with_instrumental_is_400(tmp_path, monkeypatch):
+    client, _ = make_client(tmp_path, monkeypatch)
+    with client:
+        resp = client.post("/api/generate", json={
+            "lyrics": "詞", "instrumental": True})
+        assert resp.status_code == 400
+        assert "instrumental" in resp.json()["detail"]
+        # style + instrumental（沒帶 lyrics）仍然合法
+        ok = client.post("/api/generate", json={
+            "style": "lo-fi", "instrumental": True})
+        assert ok.status_code == 200
+
+
+def test_stranded_job_marked_error_on_startup(tmp_path, monkeypatch):
+    """服務重啟前卡在 generating 的 job：下次啟動（TestClient 進入 lifespan）
+    要一律標記失敗，不能永遠卡在 generating 讓 client 輪詢不到終態。"""
+    client, store = make_client(tmp_path, monkeypatch)
+    job = store.create({"mode": "simple", "prompt": "x"})
+    job.status = "generating"
+    store.save(job)
+    with client:
+        pass
+    reloaded = store.get(job.id)
+    assert reloaded.status == "error"
+    assert reloaded.error == "browser_error"
+    assert reloaded.error_message
 
 
 def test_health_shape(tmp_path, monkeypatch):
