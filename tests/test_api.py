@@ -2,6 +2,7 @@ import asyncio
 
 from fastapi.testclient import TestClient
 
+from src import admin_db
 from src.config import Settings
 from src.jobs import Clip, JobQueue, JobStore
 from src.main import create_app
@@ -10,7 +11,14 @@ from src.main import create_app
 def make_client(tmp_path, monkeypatch, *, runner=None, api_keys="", max_size=10):
     monkeypatch.setenv("API_KEYS", api_keys)
     monkeypatch.setenv("GENERATED_DIR", str(tmp_path / "generated"))
+    # 部署機上有真的 admin.db（裡面有已發出的動態金鑰），不隔離的話
+    # 「沒設金鑰＝開放」那組測試會全部拿到 403。
+    monkeypatch.setenv("ADMIN_DB_PATH", str(tmp_path / "admin.db"))
+    monkeypatch.setenv("ADMIN_URL_PREFIX", "")
+    monkeypatch.setenv("WORKER_COUNT", "1")
     settings = Settings()
+    monkeypatch.setattr("src.admin_db.settings", settings)
+    admin_db.reset_for_tests()
 
     async def default_runner(job):
         return [Clip(id="c1", status="complete", downloadable=True, filename="c1.mp3")]
