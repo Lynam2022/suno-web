@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import re
 import time
 from contextlib import asynccontextmanager
@@ -60,6 +61,8 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
         worker = asyncio.create_task(queue.worker_loop())
         yield
         worker.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await worker
         if browser is not None:
             await browser.stop()
 
