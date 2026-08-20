@@ -344,3 +344,42 @@ export SUNO_WEB_SERVER=http://192.168.11.11:8071
 
 - `.11` 上的服務目前是 `nohup` 起的，不是 systemd。要正式化就在那台跑 `sudo bash scripts/install-service.sh`，需要密碼。
 - `LOGGED_OUT_MARKER` 還沒在真的登出畫面上正面驗證過。
+
+## 七、管理台與公網反代（2026-08-21）
+
+V1 原本把 admin webui 列在不做，這一輪補上，並經 nginx 反代到公網。
+
+### 管理台
+
+`/admin`，登入之後三頁：
+
+- **總覽**：瀏覽器活著沒、排隊數、剩餘點數、服務執行時間、近 200 筆的成功與失敗數
+- **金鑰**：現場發金鑰、停用、啟用、刪除，看每把用過幾次與最後使用時間。金鑰只存 sha256 雜湊，原文只在剛發那一次顯示。`.env` 的 `API_KEYS` 在這頁是唯讀列出（遮罩）
+- **歷史**：近 200 筆 job，含來源金鑰、送出的內容、狀態與錯誤碼、耗時、產出的音檔（可直接點開聽）
+
+金鑰驗證改成靜態與動態兩邊都認，任一邊有金鑰就強制驗證。音檔端點額外接受已登入的 admin session，因為歷史頁的連結是瀏覽器直接點的、不會帶 `x-api-key`。
+
+視覺照 AGENTS.md 的規範：深色底配珊瑚橘與洋紅，跟 gemini-web 的淺色靛藍分得開。
+
+### nginx
+
+`/home/ct/nginx/default.conf` 的兩個 server 區塊（80 與 443）各加一段，跟在 gemini-web 那段後面：
+
+- `location /suno-web/` 反代到 `192.168.11.11:8071`，`client_max_body_size 8m`、read timeout 120 秒。這支是 job 式 API，送單立刻回，不需要 gemini-web 那種 420 秒的長 timeout
+- `location = /suno-web/admin/login` 另外掛 `limit_req zone=sunoweb_login`（6 r/m、burst 5），擋登入暴力嘗試，寫法沿用 codex-image 那段
+
+服務端設 `ADMIN_URL_PREFIX=/suno-web`，頁面連結才會帶對前綴。
+
+### 公網驗收（從筆電打 ching-tech.ddns.net）
+
+| 檢查 | 結果 |
+|---|---|
+| `/suno-web/admin/login` | 200 |
+| 未登入打 `/suno-web/admin` | 303 導向 `https://ching-tech.ddns.net/suno-web/admin/login` |
+| `/suno-web/api/generate` 不帶金鑰 | 403 |
+| `/suno-web/api/health` | 200 |
+| 經管理台發一把動態金鑰，用它查既有 job | 200，金鑰頁的使用次數跟著加一 |
+| 亂打金鑰 | 403 |
+| 原本 `.env` 的靜態金鑰 | 仍然 200 |
+
+筆電的 `~/.bashrc` 已改成用管理台發的那把動態金鑰、位址指向公網，這樣用量會算在那把金鑰上，管理台看得出來。
