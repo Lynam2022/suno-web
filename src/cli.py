@@ -89,7 +89,11 @@ def _headers(api_key: str) -> dict:
 def _health(args) -> None:
     import httpx
 
-    resp = httpx.get(f"{args.server.rstrip('/')}/api/health", timeout=10)
+    try:
+        resp = httpx.get(f"{args.server.rstrip('/')}/api/health", timeout=10)
+    except httpx.ConnectError:
+        print(f"連不上 {args.server} — 服務沒起來?先跑 suno-web serve")
+        sys.exit(1)
     print(json.dumps(resp.json(), ensure_ascii=False, indent=2))
 
 
@@ -112,8 +116,12 @@ def _generate(args) -> None:
             sys.exit(2)
         body["prompt"] = args.prompt
 
-    resp = httpx.post(f"{base}/api/generate", json=body, headers=headers,
-                      timeout=30)
+    try:
+        resp = httpx.post(f"{base}/api/generate", json=body, headers=headers,
+                          timeout=30)
+    except httpx.ConnectError:
+        print(f"連不上 {args.server} — 服務沒起來?先跑 suno-web serve")
+        sys.exit(1)
     if resp.status_code != 200:
         print(f"送單失敗 {resp.status_code}: {resp.text}")
         sys.exit(1)
@@ -122,8 +130,12 @@ def _generate(args) -> None:
 
     while True:
         time.sleep(5)
-        job = httpx.get(f"{base}/api/jobs/{job_id}", headers=headers,
-                        timeout=30).json()
+        try:
+            job = httpx.get(f"{base}/api/jobs/{job_id}", headers=headers,
+                            timeout=30).json()
+        except httpx.ConnectError:
+            print("連線中斷,5 秒後重試...")
+            continue
         if job["status"] in ("done", "error"):
             break
         print(f"  {job['status']}...")
