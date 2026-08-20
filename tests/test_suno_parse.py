@@ -1,7 +1,16 @@
 import json
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
-from src.suno import extract_credits, parse_feed_payload
+from src.suno import (
+    RawClip,
+    SunoRunner,
+    _CLOCK_SKEW_TOLERANCE,
+    _parse_epoch,
+    extract_credits,
+    parse_feed_payload,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "feed_sample.json"
 
@@ -62,3 +71,83 @@ def test_extract_credits_non_dict_payload_returns_none():
 
 def test_extract_credits_missing_all_keys_returns_none():
     assert extract_credits({"unrelated": 1}) is None
+
+
+# ---- _parse_epoch（Task 11 修正：created_at 字串轉 epoch 秒數）----
+
+
+def test_parse_epoch_valid_iso8601_with_z_suffix():
+    epoch = _parse_epoch("2026-01-01T00:00:00.000Z")
+    assert epoch == datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp()
+
+
+def test_parse_epoch_none_returns_none():
+    assert _parse_epoch(None) is None
+
+
+def test_parse_epoch_empty_string_returns_none():
+    assert _parse_epoch("") is None
+
+
+def test_parse_epoch_malformed_string_returns_none():
+    assert _parse_epoch("not-a-real-date") is None
+
+
+def test_parse_epoch_non_string_truthy_value_returns_none():
+    # created_at 來自對方 JSON payload，型別標註 str | None 只是我方期待，
+    # 不是保證——這裡故意塞一個真值但非字串的 int，模擬對方回傳型別跟
+    # 預期不同的情況，_parse_epoch 要能容錯而不是炸 AttributeError。
+    assert _parse_epoch(1234567890) is None
+
+
+# ---- _is_freshly_created（Task 11 修正：用 created_at 判斷 clip 新舊）----
+
+
+def _iso(ts: float) -> str:
+    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def _runner_with_clip(clip_id: str, created_at: str | None) -> SunoRunner:
+    runner = SunoRunner(None, None)  # browser/settings 這裡用不到，帶 None 即可
+    runner._clips[clip_id] = RawClip(id=clip_id, status="complete", created_at=created_at)
+    return runner
+
+
+def test_is_freshly_created_true_when_created_at_at_or_after_submit_time():
+    submit_time = time.time()
+    runner = _runner_with_clip("new-1", created_at=_iso(submit_time + 2))
+    assert runner._is_freshly_created("new-1", before=set(), submit_time=submit_time) is True
+
+
+def test_is_freshly_created_true_within_clock_skew_tolerance():
+    submit_time = time.time()
+    # 比 submit_time 早，但還在容錯窗口內（見 _CLOCK_SKEW_TOLERANCE）
+    runner = _runner_with_clip("edge-1", created_at=_iso(submit_time - _CLOCK_SKEW_TOLERANCE + 1))
+    assert runner._is_freshly_created("edge-1", before=set(), submit_time=submit_time) is True
+
+
+def test_is_freshly_created_false_when_created_at_older_than_submit_time():
+    submit_time = time.time()
+    runner = _runner_with_clip("old-1", created_at=_iso(submit_time - 3600))
+    assert runner._is_freshly_created("old-1", before=set(), submit_time=submit_time) is False
+
+
+def test_is_freshly_created_falls_back_to_before_set_when_created_at_missing():
+    submit_time = time.time()
+    runner = _runner_with_clip("no-created-at", created_at=None)
+    assert runner._is_freshly_created("no-created-at", before=set(), submit_time=submit_time) is True
+    assert runner._is_freshly_created(
+        "no-created-at", before={"no-created-at"}, submit_time=submit_time) is False
+
+
+def test_is_freshly_created_falls_back_to_before_set_when_created_at_unparseable():
+    submit_time = time.time()
+    runner = _runner_with_clip("bad-date", created_at="not-a-real-date")
+    assert runner._is_freshly_created("bad-date", before=set(), submit_time=submit_time) is True
+    assert runner._is_freshly_created(
+        "bad-date", before={"bad-date"}, submit_time=submit_time) is False
+
+
+def test_is_freshly_created_unknown_clip_id_returns_false():
+    runner = SunoRunner(None, None)
+    assert runner._is_freshly_created("missing", before=set(), submit_time=time.time()) is False

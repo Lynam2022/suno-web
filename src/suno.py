@@ -88,8 +88,11 @@ def extract_credits(payload: Any) -> int | None:
 def _parse_epoch(created_at: str | None) -> float | None:
     """把 clip 的 created_at（ISO8601 UTC，例如 "2026-08-20T10:00:00.000Z"）
     轉成 epoch 秒數，供 _wait_new_ids 判斷「這筆是不是這次 job 才生出來的」。
-    解析失敗（欄位缺漏或格式跟預期不同）回 None，呼叫端要能容錯。"""
-    if not created_at:
+    解析失敗（欄位缺漏、型別不對、或格式跟預期不同）回 None，呼叫端要能
+    容錯——型別檢查特別列出來是因為這個值來自對方 JSON payload，型別標註
+    是 str | None 只是我方期待，不是保證，防禦一下避免 .replace() 對非
+    字串值炸 AttributeError。"""
+    if not isinstance(created_at, str) or not created_at:
         return None
     try:
         return datetime.fromisoformat(created_at.replace("Z", "+00:00")).timestamp()
