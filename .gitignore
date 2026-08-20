@@ -4,3 +4,6 @@ __pycache__/
 .env
 probe-out/
 dist/
+.pytest_cache/
+*.egg-info/
+.mypy_cache/
