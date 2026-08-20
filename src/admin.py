@@ -62,7 +62,21 @@ code{background:#241d1b;padding:2px 6px;border-radius:6px;font-size:13px}
 .tag.err{color:var(--bad);border-color:#5c2424}
 .tag.run{color:var(--warn);border-color:#5c4a24}
 input[type=text],input[type=password]{background:#191413;border:1px solid var(--line);
-  color:var(--ink);border-radius:9px;padding:9px 12px;font:inherit;min-width:220px}
+  color:var(--ink);border-radius:9px;padding:10px 12px;font:inherit;min-width:220px}
+input[type=text]:focus,input[type=password]:focus{outline:none;border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(255,122,89,.18)}
+input::placeholder{color:#7d6a62}
+/* Chrome 自動填入會用自己的白底深字蓋掉上面的樣式,在深色卡片上很突兀。
+   內陰影是唯一壓得住它背景的方法,文字顏色則要用 -webkit-text-fill-color。 */
+input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus{
+  -webkit-text-fill-color:var(--ink);
+  -webkit-box-shadow:0 0 0 1000px #191413 inset;
+  caret-color:var(--ink);
+  border:1px solid var(--line);
+  transition:background-color 9999s ease-out 0s}
+.login input{width:100%}
+.login .row{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:14px}
+.login .row input{width:auto;min-width:0}
 button{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#14100f;
   border:0;border-radius:9px;padding:9px 16px;font:inherit;font-weight:600;cursor:pointer}
 button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
@@ -141,18 +155,22 @@ def create_admin_router(*, settings: Settings, store: JobStore,
 <form method="post" action="{url('/admin/login')}">
 <p><input type="text" name="username" placeholder="帳號" autofocus></p>
 <p><input type="password" name="password" placeholder="密碼"></p>
+<p class="row"><label class="row"><input type="checkbox" name="remember"> 記住我 30 天</label></p>
 <p><button type="submit">登入</button></p></form></div></main></body></html>""")
 
     @router.post("/admin/login")
-    async def login(username: str = Form(""), password: str = Form("")):
+    async def login(username: str = Form(""), password: str = Form(""),
+                    remember: str = Form("")):
         ok = (constant_equals(username, settings.admin_username)
               and constant_equals(password, settings.admin_password))
         if not ok:
             return RedirectResponse(url("/admin/login?err=1"), status_code=303)
-        token = create_admin_session(username, settings.admin_session_secret)
+        ttl = 30 * 86400 if remember else 86400
+        token = create_admin_session(username, settings.admin_session_secret,
+                                     ttl_seconds=ttl)
         resp = RedirectResponse(url("/admin"), status_code=303)
         resp.set_cookie(_COOKIE, token, httponly=True, samesite="lax",
-                        max_age=86400, path="/")
+                        max_age=ttl, path="/")
         return resp
 
     @router.get("/admin/logout")

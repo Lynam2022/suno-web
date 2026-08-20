@@ -137,3 +137,24 @@ def test_key_times_render_as_local_not_raw_utc(client):
     body = client.get("/admin/keys").text
     assert "+00:00" not in body
     assert "時間測試" in body
+
+
+def test_remember_me_extends_the_session_cookie(client):
+    """沒勾記住我＝1 天,勾了＝30 天。"""
+    short = client.post("/admin/login",
+                        data={"username": "admin", "password": "secret123"},
+                        follow_redirects=False)
+    assert "Max-Age=86400" in short.headers["set-cookie"]
+
+    client.cookies.clear()
+    long = client.post("/admin/login",
+                       data={"username": "admin", "password": "secret123",
+                             "remember": "on"},
+                       follow_redirects=False)
+    assert f"Max-Age={30 * 86400}" in long.headers["set-cookie"]
+
+
+def test_login_page_has_autofill_override_and_remember_box(client):
+    body = client.get("/admin/login").text
+    assert "-webkit-autofill" in body
+    assert 'name="remember"' in body
