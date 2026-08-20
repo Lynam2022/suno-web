@@ -39,6 +39,42 @@ uv run suno-web login
 uv run suno-web login -w 1    # 第二個帳號，profile 存在 ~/.suno-web/profiles-1/
 ```
 
+## 運作方式
+
+一單從送出到拿到 mp3，中間是這樣走的：
+
+```
+POST /api/generate
+  → 佇列挑一個帳號（點數最多的那個）
+  → 那個帳號的 Chrome 起來（沒開的話）
+  → 導覽到 Create 頁、確認登入態
+  → 填表單、按 Create
+  → 側錄頁面自己在打的 clip feed，認出這一單新生的 clip
+  → 每 20 秒 reload 一次，等到 clip 變成終態
+  → 用瀏覽器的 cookie 下載 mp3 與封面，存進 generated/<job_id>/
+  → job 標成 done
+```
+
+送單那一步立刻回 `job_id`，不等生成。整段跑完通常 2 到 4 分鐘。
+
+### 為什麼寫入走 UI、讀取走側錄
+
+**寫入**（填表單、按 Create）只能走畫面：Suno 的生成端點要一個前端才拿得到的驗證，直接打 API 會被擋。
+
+**讀取**走網路側錄（`page.on("response")` 攔頁面自己在打的 feed JSON），不從畫面刮資料。好處是 Suno 改版時只有「填表單」那一半會壞，而 selector 全部集中在 `src/selectors.py`，修一個檔就好。
+
+### 認出「這一單」的 clip
+
+帳號的 feed 裡混著所有歷史歌曲，所以不能只看「有沒有新東西冒出來」。判斷方式是比對 clip 的 `created_at`（Suno 伺服器時間）晚不晚於按下 Create 的時刻。實測帳號裡有 16 首舊歌時，仍精準只挑出這一單的 4 首。
+
+### 為什麼要定期 reload
+
+`streaming` 轉 `complete` 這個狀態變化，Suno 前端走的是即時管道（推測 WebSocket），HTTP 側錄攔不到。純被動等會永遠等不到終態。實測卡了 560 秒都沒動靜，reload 一次立刻讀到已完成。所以 `_wait_terminal` 每 20 秒主動 reload，逼前端重打一次 feed。
+
+### 瀏覽器什麼時候起來、什麼時候關掉
+
+派工到某個帳號才啟動它的 Chrome，閒置 `IDLE_SHUTDOWN_MINUTES`（預設 10 分鐘）後關掉。每單多約 10 到 15 秒的啟動時間，換掉常駐多個 Chrome 的數 GB 記憶體。
+
 ## CLI
 
 ```bash
@@ -278,6 +314,26 @@ V1 沒有瀏覽器自動自癒：建議外部監控定期打 `/api/health`，看
 - 登入態過期要人工重跑 `suno-web login`，需要桌面環境。
 - V1 不做：admin webui、動態金鑰、History 頁、多帳號 worker pool。
 - 尚未驗證的部分記在 `docs/acceptance-2026-08-20.md`：經 API 或 CLI 走完整條 happy path、Custom 與 instrumental 兩條分支的真實生成、VIP 鎖 clip 的實例，都因為帳號當月點數已經用完而延後到下個月配額重置時補。
+
+## 排查
+
+先跑 `python3 scripts/checkup.py`，多數問題那一頁就看得出來。以下是症狀對照：
+
+| 症狀 | 先看哪裡 |
+|---|---|
+| job 一直停在 `generating` | 正常情況 2 到 4 分鐘。超過就看 `/api/health` 的 `browser_alive`；服務中途被砍掉留下的 job 會在下次啟動時被標成 error |
+| `captcha_required` | 那個帳號還沒開通。用 `suno-web login -w N` 開視窗、手動生一首（順手關掉 Pro 方案的推銷彈窗），之後就好了 |
+| `not_logged_in` | 登入態過期，重跑 `suno-web login -w N` |
+| `submit_failed`，訊息提到 selector | Suno 改版了。跑 `python3 scripts/probe.py` 重新偵察，只改 `src/selectors.py` |
+| `download_failed` | clip 生出來了但音檔抓不到。看管理台歷史頁那一單的 clip 狀態 |
+| `generation_timeout` | 超過 `DEFAULT_TIMEOUT`（預設 600 秒）。Suno 忙的時候會發生，重送即可 |
+| 瀏覽器起不來，說 `ProcessSingleton` | 同一個 profile 已經有另一個 Chrome 開著。服務跑著的時候不要另外開同一個帳號的瀏覽器 |
+| 瀏覽器起不來，說 `chrome-sandbox` | 那台的 Chrome 沙箱沒設好。`.env` 設 `CHROME_NO_SANDBOX=true` |
+| `login` 說沒有 DISPLAY | 遠端登入要用 `ssh -X` |
+| 管理台連不上 | `systemctl status suno-web-api`；反代的話再看 nginx 的 `location` 有沒有指對 |
+| 生成全部失敗、但畫面看起來正常 | 跑 `python3 scripts/canary.py --dry-run`。它會查登入態、selector、點數、有沒有被要求驗證碼 |
+
+錯誤碼的完整清單與建議動作在 [AGENTS.md](AGENTS.md)。每個判斷背後的實測證據在 `docs/acceptance-2026-08-20.md`。
 
 ## 開發
 
