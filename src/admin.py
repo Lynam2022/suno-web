@@ -33,6 +33,7 @@ _NAV = (
 
 _CSS = """
 :root{
+  color-scheme:dark;
   --bg:#151110; --panel:#1f1a18; --panel2:#191413; --line:#2f2724; --ink:#f4ece7;
   --muted:#a89489; --accent:#ff7a59; --accent2:#ff4d9d;
   --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
@@ -458,7 +459,7 @@ def _clips_html(job: Job, url) -> str:
         if c.filename:
             src = url(f"/api/jobs/{job.id}/files/{c.filename}")
             out.append(f'<div><b>{name}</b> <span class="muted">{dur}</span>'
-                       f'<br><audio controls preload="none" src="{src}"></audio></div>')
+                       f'<br><audio controls preload="metadata" src="{src}"></audio></div>')
         else:
             out.append(f'<div class="muted">{name} {dur}（沒抓到音檔）</div>')
     return "".join(out)
