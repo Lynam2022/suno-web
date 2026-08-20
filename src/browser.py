@@ -29,11 +29,14 @@ class BrowserManager:
         self._headless = settings.headless if headless is None else headless
         self._profile_dir = profile_dir or settings.profile_dir
         self._chrome_binary = chrome_binary or settings.chrome_binary
+        self._no_sandbox = settings.chrome_no_sandbox
         self._playwright = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
         self._page: Page | None = None
         self._proc: subprocess.Popen | None = None
+        self._stderr_path: Path | None = None
+        self._stderr_file = None
 
     def _resolve_chrome(self) -> str:
         found = shutil.which(self._chrome_binary)
@@ -66,8 +69,14 @@ class BrowserManager:
         ]
         if self._headless:
             args.append("--headless=new")
+        if self._no_sandbox:
+            args.append("--no-sandbox")
+        # Chrome 的 stderr 留著：它啟動失敗時的原因只寫在這裡（例如 sandbox
+        # 沒設定好），丟掉的話錯誤訊息只能用猜的。
+        self._stderr_path = profile / "chrome-stderr.log"
+        self._stderr_file = self._stderr_path.open("w", encoding="utf-8")
         self._proc = subprocess.Popen(
-            args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            args, stdout=subprocess.DEVNULL, stderr=self._stderr_file)
 
         port = await self._wait_for_port(port_file)
         self._playwright = await async_playwright().start()
@@ -85,8 +94,8 @@ class BrowserManager:
             if self._proc is not None and self._proc.poll() is not None:
                 await self._kill_process()
                 raise RuntimeError(
-                    "Chrome 啟動後立刻結束了。最常見的原因是同一個 profile 目錄"
-                    f"（{self._profile_dir}）已經被另一個 Chrome 佔用。"
+                    "Chrome 啟動後立刻結束了。Chrome 自己說："
+                    f"{self._read_stderr_tail()}"
                 )
             if port_file.is_file():
                 first_line = port_file.read_text(encoding="utf-8").splitlines()[:1]
@@ -95,7 +104,17 @@ class BrowserManager:
             await asyncio.sleep(0.2)
         await self._kill_process()
         raise RuntimeError(
-            f"等不到 Chrome 的 DevToolsActivePort（{_PORT_WAIT_SECONDS} 秒）。")
+            f"等不到 Chrome 的 DevToolsActivePort（{_PORT_WAIT_SECONDS} 秒）。"
+            f"Chrome 的輸出：{self._read_stderr_tail()}")
+
+    def _read_stderr_tail(self, lines: int = 4) -> str:
+        if self._stderr_file is not None:
+            self._stderr_file.flush()
+        if self._stderr_path is None or not self._stderr_path.is_file():
+            return "（沒有輸出）"
+        tail = self._stderr_path.read_text(encoding="utf-8",
+                                           errors="replace").splitlines()[-lines:]
+        return " / ".join(t.strip() for t in tail) or "（沒有輸出）"
 
     async def _kill_process(self) -> None:
         """只終止自己起的那一個 Chrome，不掃全域，多帳號才不會互相波及。"""
@@ -103,6 +122,12 @@ class BrowserManager:
         self._proc = None
         if proc is None or proc.poll() is not None:
             return
+        if self._stderr_file is not None:
+            try:
+                self._stderr_file.close()
+            except Exception:
+                pass
+            self._stderr_file = None
         proc.terminate()
         for _ in range(50):
             if proc.poll() is not None:

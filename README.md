@@ -153,6 +153,7 @@ curl -s http://localhost:8071/api/health
 | `PROFILE_DIR` | 登入態的瀏覽器 profile 目錄 | `~/.suno-web/profiles` |
 | `SUNO_URL` | Suno 生成頁網址 | `https://suno.com/create` |
 | `CHROME_BINARY` | 真 Chrome 的執行檔，找不到就給明確錯誤 | `google-chrome` |
+| `CHROME_NO_SANDBOX` | 關掉 Chrome 沙箱。只有沙箱起不來的機器才需要（例如把 deb 解到家目錄、`chrome-sandbox` 沒有 root 的 setuid 位元） | `false` |
 | `HOST` | 監聽位址 | `0.0.0.0` |
 | `PORT` | 服務埠 | `8071` |
 | `QUEUE_MAX_SIZE` | 最大排隊單數，滿了回 429 | `10` |

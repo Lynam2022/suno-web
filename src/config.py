@@ -37,6 +37,10 @@ class Settings:
         # 真 Chrome 的執行檔。刻意不用 Playwright 內建的 Chromium：那個過不了
         # Suno 的 Turnstile 驗證，理由見 src/browser.py 的模組說明。
         self.chrome_binary: str = os.getenv("CHROME_BINARY", "google-chrome")
+        # 預設保留 Chrome 的沙箱。只有在沙箱起不來的機器才打開這個（例如把
+        # deb 解到家目錄、chrome-sandbox 沒有 root 的 setuid 位元），代價是
+        # 少一層隔離，所以不當預設。
+        self.chrome_no_sandbox: bool = _bool(os.getenv("CHROME_NO_SANDBOX"), False)
 
         # 服務
         self.host: str = os.getenv("HOST", "0.0.0.0")
