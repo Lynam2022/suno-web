@@ -289,3 +289,12 @@ uv run pytest -q
 ## 授權
 
 MIT License，見 `LICENSE`。
+
+---
+
+由 **林亞澤 Yaze Lin** 開發。覺得有用，歡迎分享，或請我喝杯咖啡。
+
+- 原始碼 GitHub：<https://github.com/yazelin/suno-web>
+- 部落格：<https://yazelin.github.io/>
+- Facebook：<https://www.facebook.com/yaze.lin.gm>
+- Buy Me a Coffee：<https://buymeacoffee.com/yazelin>
