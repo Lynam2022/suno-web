@@ -171,9 +171,11 @@ curl -s http://localhost:8071/api/health
 
 job 記錄固定寫 `~/.suno-web/jobs.db`，這個位置不吃環境變數。
 
-## systemd 部署
+## 部署
 
-還沒部署到任何一台機器，以下是部署方式。
+目前跑在 192.168.11.11:8071（Chrome 解在該機家目錄、`CHROME_NO_SANDBOX=true`、開機用使用者 crontab 的 `@reboot` 拉起來）。部署與跨機器驗收的細節見 `docs/acceptance-2026-08-20.md` 第六節。
+
+以下是用 systemd 正式化的方式（需要該機的 sudo 密碼）。
 
 ```bash
 sudo bash scripts/install-service.sh

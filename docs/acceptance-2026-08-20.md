@@ -304,3 +304,43 @@ port 交給系統挑、每個實例只管自己的程序，這兩點是為了將
 一單出 4 首、扣 10 點。此帳號的 feed 當下有 16 個舊 clip，`created_at` 過濾精準只挑出這一單的 4 首，Task 11 那個修正在真實情境下站得住。
 
 VIP 這件事要修正先前的假設：preview clip 下載得到，只是長度固定 60 秒，付費買的是完整長度而不是下載權。真正抓不到音檔的 clip 才會標 `downloadable: false`。
+
+## 六、部署 192.168.11.11（2026-08-21）
+
+| 項目 | 內容 |
+|---|---|
+| 服務位址 | `http://192.168.11.11:8071` |
+| repo | `~/suno-web`（clone 自 GitHub，`git pull` 更新） |
+| Chrome | `~/opt/chrome/opt/google/chrome/chrome`（官方 deb 解到家目錄，那台的 apt 要密碼） |
+| 沙箱 | 關閉。解到家目錄的 `chrome-sandbox` 沒有 root 的 setuid 位元，所以 `.env` 設了 `CHROME_NO_SANDBOX=true` |
+| 登入態 | 從筆電 rsync 過去（`~/.suno-web/profiles/`），沒有在那台重新登入 |
+| 開機自動啟動 | 使用者 crontab 的 `@reboot`。那台 sudo 要密碼，所以沒用 `scripts/install-service.sh` 的 systemd 路線 |
+
+### 跨機器真驗收
+
+筆電送單、`.11` 生成、筆電取檔：
+
+```
+POST /api/generate  {"prompt": "a gentle lo-fi beat for late night study"}
+  -> {"job_id": "aea1317fba04", "status": "queued"}
+輪詢 143.9 秒後 status=done，2 首 clip 皆 complete、downloadable
+下載回筆電 ffprobe：114.312 秒（2531574 bytes）、185.112 秒（3814374 bytes）
+```
+
+金鑰驗證同時確認：`/api/generate` 與檔案端點不帶 `x-api-key` 都回 403，`/api/health` 免金鑰可打。
+
+### 這台筆電的設定
+
+`~/.bashrc`（放在非互動 shell 早退判斷之前，腳本才讀得到）：
+
+```bash
+export SUNO_WEB_API_KEY=<金鑰>
+export SUNO_WEB_SERVER=http://192.168.11.11:8071
+```
+
+設好之後 `suno-web health`、`suno-web generate "..." -o out/` 都不必再打 `--server`。
+
+### 還沒做的
+
+- `.11` 上的服務目前是 `nohup` 起的，不是 systemd。要正式化就在那台跑 `sudo bash scripts/install-service.sh`，需要密碼。
+- `LOGGED_OUT_MARKER` 還沒在真的登出畫面上正面驗證過。
