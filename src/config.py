@@ -52,6 +52,18 @@ class Settings:
         _keys = os.getenv("API_KEYS", "")
         self.api_keys: set[str] = {k.strip() for k in _keys.split(",") if k.strip()}
 
+
+        # Admin webui
+        self.admin_username: str = os.getenv("ADMIN_USERNAME", "admin")
+        self.admin_password: str = os.getenv("ADMIN_PASSWORD", "change-me")
+        self.admin_session_secret: str = os.getenv(
+            "ADMIN_SESSION_SECRET", "dev-only-session-secret")
+        # 反代到子路徑時要設（例如 nginx 的 location /suno-web/），頁面連結
+        # 才會帶對前綴。直接打 8071 就留空。
+        self.admin_url_prefix: str = os.getenv("ADMIN_URL_PREFIX", "").rstrip("/")
+        self.admin_db_path: str = os.getenv(
+            "ADMIN_DB_PATH", str(Path(_DEFAULT_DATA_DIR) / "admin.db"))
+
         # 資料落點
         self.data_dir: str = _DEFAULT_DATA_DIR
         self.generated_dir: str = os.getenv(

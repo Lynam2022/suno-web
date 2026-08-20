@@ -1,0 +1,130 @@
+"""Admin webui 與動態金鑰。"""
+import pytest
+from fastapi.testclient import TestClient
+
+from src import admin_db
+from src.config import Settings
+from src.jobs import Clip, JobQueue, JobStore
+from src.main import create_app
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    monkeypatch.setenv("API_KEYS", "")
+    monkeypatch.setenv("ADMIN_USERNAME", "admin")
+    monkeypatch.setenv("ADMIN_PASSWORD", "secret123")
+    monkeypatch.setenv("ADMIN_SESSION_SECRET", "test-secret")
+    monkeypatch.setenv("ADMIN_DB_PATH", str(tmp_path / "admin.db"))
+    monkeypatch.setenv("GENERATED_DIR", str(tmp_path / "generated"))
+    settings = Settings()
+    monkeypatch.setattr("src.admin_db.settings", settings)
+    admin_db.reset_for_tests()
+
+    async def runner(job):
+        return [Clip(id="c1", status="complete", downloadable=True,
+                     filename="c1.mp3")]
+
+    store = JobStore(str(tmp_path / "jobs.db"))
+    queue = JobQueue(store, runner, max_size=10, default_timeout=5,
+                     generated_dir=settings.generated_dir, retention_days=14)
+    app = create_app(settings=settings, store=store, queue=queue,
+                     health_extra=lambda: {"browser_alive": True,
+                                           "logged_in": True, "credits": 90})
+    with TestClient(app) as c:
+        yield c
+    admin_db.reset_for_tests()
+
+
+def login(client):
+    r = client.post("/admin/login",
+                    data={"username": "admin", "password": "secret123"},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    return r
+
+
+def test_admin_requires_login(client):
+    for path in ("/admin", "/admin/keys", "/admin/history"):
+        r = client.get(path, follow_redirects=False)
+        assert r.status_code == 303
+        assert "/admin/login" in r.headers["location"]
+
+
+def test_wrong_password_does_not_grant_session(client):
+    r = client.post("/admin/login", data={"username": "admin", "password": "nope"},
+                    follow_redirects=False)
+    assert "err=1" in r.headers["location"]
+    assert client.get("/admin", follow_redirects=False).status_code == 303
+
+
+def test_login_then_pages_render(client):
+    login(client)
+    body = client.get("/admin").text
+    assert "服務狀態" in body and "剩餘點數" in body and "90" in body
+    assert "歷史" in client.get("/admin/history").text
+
+
+def test_issue_key_then_it_authorizes_the_api(client):
+    login(client)
+    r = client.post("/admin/keys", data={"name": "筆電 CLI"},
+                    follow_redirects=False)
+    raw = r.headers["location"].split("new=")[1]
+    assert raw.startswith("snw_")
+
+    # 發了金鑰之後,API 就必須帶金鑰
+    assert client.post("/api/generate", json={"prompt": "x"}).status_code == 403
+    ok = client.post("/api/generate", json={"prompt": "x"},
+                     headers={"x-api-key": raw})
+    assert ok.status_code == 200
+
+    # 用量有記到那把金鑰上,而且原文不會再出現在頁面
+    page = client.get("/admin/keys").text
+    assert "筆電 CLI" in page and raw not in page
+
+    keys = admin_db.list_api_keys()
+    assert keys[0]["requests_count"] == 1
+
+
+def test_disabled_key_is_rejected(client):
+    login(client)
+    r = client.post("/admin/keys", data={"name": "臨時"}, follow_redirects=False)
+    raw = r.headers["location"].split("new=")[1]
+    key_id = admin_db.list_api_keys()[0]["id"]
+
+    client.post(f"/admin/keys/{key_id}/disable", follow_redirects=False)
+    assert client.post("/api/generate", json={"prompt": "x"},
+                       headers={"x-api-key": raw}).status_code == 403
+
+    client.post(f"/admin/keys/{key_id}/enable", follow_redirects=False)
+    assert client.post("/api/generate", json={"prompt": "x"},
+                       headers={"x-api-key": raw}).status_code == 200
+
+
+def test_history_shows_the_key_that_made_the_job(client):
+    login(client)
+    r = client.post("/admin/keys", data={"name": "某專案"}, follow_redirects=False)
+    raw = r.headers["location"].split("new=")[1]
+    client.post("/api/generate", json={"prompt": "一首測試曲"},
+                headers={"x-api-key": raw})
+    body = client.get("/admin/history").text
+    assert "某專案" in body and "一首測試曲" in body
+
+
+def test_admin_session_can_fetch_audio_but_stranger_cannot(client, tmp_path):
+    """歷史頁的音檔連結是瀏覽器直接點的,不會帶 x-api-key,所以已登入的
+    session 要放行;沒登入也沒金鑰的一律 403。"""
+    login(client)
+    r = client.post("/admin/keys", data={"name": "k"}, follow_redirects=False)
+    raw = r.headers["location"].split("new=")[1]
+    job_id = client.post("/api/generate", json={"prompt": "x"},
+                         headers={"x-api-key": raw}).json()["job_id"]
+    d = tmp_path / "generated" / job_id
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "c1.mp3").write_bytes(b"x" * 2048)
+
+    assert client.get(f"/api/jobs/{job_id}/files/c1.mp3").status_code == 200
+
+    client.cookies.clear()
+    assert client.get(f"/api/jobs/{job_id}/files/c1.mp3").status_code == 403
+    assert client.get(f"/api/jobs/{job_id}/files/c1.mp3",
+                      headers={"x-api-key": raw}).status_code == 200

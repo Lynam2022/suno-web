@@ -150,6 +150,12 @@ curl -s http://localhost:8071/api/health
 
 `logged_in` 與 `credits` 是惰性觀測值：服務剛起來時兩個都是 `null`，要等第一個 job 真的導覽過 Create 頁面、側錄到帳單 API 之後才有值。剛啟動就讀到 `null` 是預期行為。`credits` 對免費帳號算的是 `monthly_limit - monthly_usage`，也就是這個月還剩幾點。
 
+## 管理台
+
+`/admin`：登入之後可以看服務狀態與近 200 筆 job 的歷史（含每一單是哪把金鑰送的、產出幾首、多長、直接點開聽），也可以現場發金鑰、停用、刪除。金鑰只存 sha256 雜湊，原文只在剛發出來那一次顯示。
+
+`.env` 的 `API_KEYS` 仍然有效，在管理台是唯讀顯示（要改就改 `.env` 再重啟）。只要靜態或動態任一邊有金鑰，`/api/generate` 與 `/api/jobs/*` 就強制驗證。
+
 ## 環境變數
 
 放在 repo 根目錄的 `.env`，範本見 `.env.example`。
@@ -168,6 +174,11 @@ curl -s http://localhost:8071/api/health
 | `API_KEYS` | API 金鑰，逗號分隔多把；沒設＝開放 | 無 |
 | `GENERATED_DIR` | 音檔落地目錄 | `~/.suno-web/generated` |
 | `AUDIO_RETENTION_DAYS` | 音檔保留天數，超過的在下次生成時順手清掉 | `14` |
+| `ADMIN_USERNAME` | 管理台帳號 | `admin` |
+| `ADMIN_PASSWORD` | 管理台密碼，**對外開放前一定要改** | `change-me` |
+| `ADMIN_SESSION_SECRET` | 管理台 cookie 的簽章密鑰，**上線前一定要改** | `dev-only-session-secret` |
+| `ADMIN_URL_PREFIX` | 反代到子路徑時的前綴，例如 `/suno-web` | 空 |
+| `ADMIN_DB_PATH` | 動態金鑰的資料庫 | `~/.suno-web/admin.db` |
 
 job 記錄固定寫 `~/.suno-web/jobs.db`，這個位置不吃環境變數。
 

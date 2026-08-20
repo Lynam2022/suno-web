@@ -133,6 +133,21 @@ class JobStore:
             self._conn.commit()
             return cur.rowcount
 
+    def list_recent(self, limit: int = 100) -> list[Job]:
+        """給 admin History 頁用：最近的 job，新的在前。"""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id,status,params,clips,error,error_message,"
+                "created_at,started_at,finished_at FROM jobs"
+                " ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+        return [
+            Job(id=r[0], status=r[1], params=json.loads(r[2]),
+                clips=[Clip(**c) for c in json.loads(r[3])],
+                error=r[4], error_message=r[5],
+                created_at=r[6], started_at=r[7], finished_at=r[8])
+            for r in rows
+        ]
+
 
 class GenerationError(Exception):
     """runner 拋的可分類錯誤，code 會進 job.error"""

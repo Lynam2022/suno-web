@@ -14,8 +14,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .config import Settings
+from . import admin_db
+from .admin import create_admin_router
 from .jobs import JobQueue, JobStore, QueueFullError
-from .security import is_authorized
+from .security import is_authorized, verify_admin_session
 
 _JOB_ID_RE = re.compile(r"^[0-9a-f]{12}$")
 _SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -63,6 +65,7 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
     async def lifespan(app: FastAPI):
         # 服務重啟前卡在 queued/generating 的 job 永遠不會再被排到（queue 是
         # 純記憶體佇列），不作廢的話 client 會永遠輪詢不到終態。
+        admin_db.init_db()
         store.fail_unfinished("服務重啟，重啟前未完成的 job 一律作廢")
         if browser is not None:
             await browser.start()
@@ -76,13 +79,29 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
 
     app = FastAPI(lifespan=lifespan)
 
-    def require_key(request: Request) -> None:
-        if not is_authorized(request.headers.get("x-api-key"), settings.api_keys):
-            raise HTTPException(status_code=403, detail="invalid_api_key")
+    def require_key(request: Request) -> str | None:
+        """通過就回「這把金鑰的名稱」給 handler 記進 job；沒設任何金鑰時回 None。
+
+        兩種來源都認：.env 的 API_KEYS（靜態、改了要重啟）與 admin 頁面現場
+        發的動態金鑰（存雜湊在 admin.db）。只要其中一邊設了金鑰就強制驗證。
+        """
+        provided = request.headers.get("x-api-key")
+        if is_authorized(provided, settings.api_keys) and not admin_db.has_any_dynamic_key():
+            return None
+        if provided and provided in settings.api_keys:
+            return ".env 靜態金鑰"
+        row = admin_db.get_api_key_by_token(provided) if provided else None
+        if row and row["enabled"]:
+            admin_db.mark_api_key_used(row["id"])
+            return str(row["name"])
+        raise HTTPException(status_code=403, detail="invalid_api_key")
 
     @app.post("/api/generate")
-    async def generate(req: GenerateRequest, _: None = Depends(require_key)) -> dict:
+    async def generate(req: GenerateRequest,
+                       key_name: str | None = Depends(require_key)) -> dict:
         params = build_params(req, settings.default_timeout)
+        if key_name:
+            params["api_key_name"] = key_name
         try:
             job = queue.submit(params)
         except QueueFullError:
@@ -90,21 +109,33 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
         return {"job_id": job.id, "status": job.status}
 
     @app.get("/api/jobs/{job_id}")
-    async def get_job(job_id: str, _: None = Depends(require_key)) -> dict:
+    async def get_job(job_id: str, _=Depends(require_key)) -> dict:
         job = store.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="not_found")
         return job.to_api()
 
+    def require_key_or_admin(request: Request):
+        """音檔端點：API 呼叫端帶 x-api-key，管理台的瀏覽器則靠已登入的
+        session cookie——歷史頁的連結是直接點開的，瀏覽器不會帶 header。"""
+        if verify_admin_session(request.cookies.get("suno_admin"),
+                                settings.admin_session_secret):
+            return "admin"
+        return require_key(request)
+
     @app.get("/api/jobs/{job_id}/files/{name}")
     async def get_file(job_id: str, name: str,
-                       _: None = Depends(require_key)) -> FileResponse:
+                       _=Depends(require_key_or_admin)) -> FileResponse:
         if not _JOB_ID_RE.match(job_id) or not _SAFE_NAME_RE.match(name):
             raise HTTPException(status_code=404, detail="not_found")
         path = Path(settings.generated_dir) / job_id / name
         if not path.is_file():
             raise HTTPException(status_code=404, detail="not_found")
         return FileResponse(path)
+
+    app.include_router(create_admin_router(
+        settings=settings, store=store, queue=queue,
+        started_at=started_at, health_extra=health_extra))
 
     @app.get("/api/health")
     async def health() -> dict:
