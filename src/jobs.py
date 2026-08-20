@@ -1,0 +1,119 @@
+"""Job 資料模型、SQLite 儲存、佇列與 worker"""
+from __future__ import annotations
+
+import asyncio
+import json
+import shutil
+import sqlite3
+import threading
+import time
+import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Awaitable, Callable
+
+
+@dataclass
+class Clip:
+    id: str
+    title: str = ""
+    status: str = ""              # Suno 端狀態：complete / error / ...
+    duration: float | None = None
+    downloadable: bool = False
+    filename: str | None = None            # 已落地音檔檔名（generated/<job_id>/ 下）
+    image_filename: str | None = None
+
+    def to_api(self, job_id: str) -> dict[str, Any]:
+        d: dict[str, Any] = {
+            "id": self.id, "title": self.title, "status": self.status,
+            "duration": self.duration, "downloadable": self.downloadable,
+        }
+        if self.filename:
+            d["audio_url"] = f"/api/jobs/{job_id}/files/{self.filename}"
+        if self.image_filename:
+            d["image_url"] = f"/api/jobs/{job_id}/files/{self.image_filename}"
+        return d
+
+
+@dataclass
+class Job:
+    id: str
+    status: str = "queued"        # queued / generating / done / error
+    params: dict = field(default_factory=dict)
+    clips: list[Clip] = field(default_factory=list)
+    error: str | None = None
+    error_message: str | None = None
+    created_at: float = 0.0
+    started_at: float | None = None
+    finished_at: float | None = None
+
+    def to_api(self) -> dict[str, Any]:
+        elapsed = None
+        if self.started_at:
+            elapsed = round((self.finished_at or time.time()) - self.started_at, 1)
+        return {
+            "job_id": self.id, "status": self.status,
+            "clips": [c.to_api(self.id) for c in self.clips],
+            "error": self.error, "error_message": self.error_message,
+            "elapsed_seconds": elapsed,
+        }
+
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY,
+    status TEXT NOT NULL,
+    params TEXT NOT NULL,
+    clips TEXT NOT NULL,
+    error TEXT,
+    error_message TEXT,
+    created_at REAL NOT NULL,
+    started_at REAL,
+    finished_at REAL
+)
+"""
+
+
+class JobStore:
+    """SQLite job 記錄。服務重啟後查舊 job 不會 404。"""
+
+    def __init__(self, db_path: str) -> None:
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._lock = threading.Lock()
+        with self._lock:
+            self._conn.execute(_SCHEMA)
+            self._conn.commit()
+
+    def create(self, params: dict) -> Job:
+        job = Job(id=uuid.uuid4().hex[:12], params=params, created_at=time.time())
+        self.save(job)
+        return job
+
+    def save(self, job: Job) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO jobs VALUES (?,?,?,?,?,?,?,?,?)",
+                (job.id, job.status,
+                 json.dumps(job.params, ensure_ascii=False),
+                 json.dumps([c.__dict__ for c in job.clips], ensure_ascii=False),
+                 job.error, job.error_message,
+                 job.created_at, job.started_at, job.finished_at),
+            )
+            self._conn.commit()
+
+    def get(self, job_id: str) -> Job | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT id,status,params,clips,error,error_message,"
+                "created_at,started_at,finished_at FROM jobs WHERE id=?",
+                (job_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return Job(
+            id=row[0], status=row[1], params=json.loads(row[2]),
+            clips=[Clip(**c) for c in json.loads(row[3])],
+            error=row[4], error_message=row[5],
+            created_at=row[6], started_at=row[7], finished_at=row[8],
+        )
