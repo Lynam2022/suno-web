@@ -117,3 +117,86 @@ class JobStore:
             error=row[4], error_message=row[5],
             created_at=row[6], started_at=row[7], finished_at=row[8],
         )
+
+
+class GenerationError(Exception):
+    """runner 拋的可分類錯誤，code 會進 job.error"""
+
+    def __init__(self, code: str, message: str = "") -> None:
+        super().__init__(message or code)
+        self.code = code
+        self.message = message
+
+
+class QueueFullError(Exception):
+    pass
+
+
+Runner = Callable[["Job"], Awaitable[list[Clip]]]
+
+
+class JobQueue:
+    """單 worker：一次跑一單，其餘排隊。"""
+
+    def __init__(self, store: JobStore, runner: Runner, *,
+                 max_size: int, default_timeout: int,
+                 generated_dir: str, retention_days: int) -> None:
+        self._store = store
+        self._runner = runner
+        self._queue: asyncio.Queue[str] = asyncio.Queue(maxsize=max_size)
+        self._default_timeout = default_timeout
+        self._generated_dir = generated_dir
+        self._retention_days = retention_days
+
+    @property
+    def queue_size(self) -> int:
+        return self._queue.qsize()
+
+    def submit(self, params: dict) -> Job:
+        if self._queue.full():
+            raise QueueFullError()
+        job = self._store.create(params)
+        self._queue.put_nowait(job.id)
+        return job
+
+    async def worker_loop(self) -> None:
+        while True:
+            job_id = await self._queue.get()
+            job = self._store.get(job_id)
+            if job is None:
+                continue
+            job.status = "generating"
+            job.started_at = time.time()
+            self._store.save(job)
+            cleanup_expired(self._generated_dir, self._retention_days)
+            timeout = int(job.params.get("timeout") or self._default_timeout)
+            try:
+                clips = await asyncio.wait_for(self._runner(job), timeout=timeout)
+                job.clips = clips
+                if not any(c.downloadable for c in clips):
+                    raise GenerationError("download_failed", "一首可下載的都沒有")
+                job.status = "done"
+            except GenerationError as e:
+                job.status = "error"
+                job.error = e.code
+                job.error_message = e.message or None
+            except asyncio.TimeoutError:
+                job.status = "error"
+                job.error = "generation_timeout"
+            except Exception as e:  # 意料外的一律歸 browser_error
+                job.status = "error"
+                job.error = "browser_error"
+                job.error_message = str(e)[:500]
+            job.finished_at = time.time()
+            self._store.save(job)
+
+
+def cleanup_expired(generated_dir: str, retention_days: int) -> None:
+    """刪掉超過保留天數的 job 目錄。生成前順手呼叫，不另開排程。"""
+    root = Path(generated_dir)
+    if not root.is_dir():
+        return
+    cutoff = time.time() - retention_days * 86400
+    for child in root.iterdir():
+        if child.is_dir() and child.stat().st_mtime < cutoff:
+            shutil.rmtree(child, ignore_errors=True)
