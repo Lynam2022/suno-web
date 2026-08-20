@@ -267,3 +267,40 @@ POST https://studio-api-prod.suno.com/api/c/check
 ### 結論
 
 生成路徑在 Suno 端被關掉，不是本專案的設定或程式問題。同一天稍早還連續生成過三單，所以有可能是短期風險升級而非永久政策。其餘功能全數可用。部署 .11 暫緩，等驗證放寬後再重跑本文件第三節列的延後項目。
+
+## 五、解法：改用真 Chrome 加 CDP（2026-08-21）
+
+第四節那道 Turnstile 不是無解，關鍵在瀏覽器本體。
+
+### 對照實驗
+
+| 啟動方式 | `/api/c/check` | Turnstile | 生成請求 |
+|---|---|---|---|
+| Playwright 啟動內建 Chromium（原本的做法） | `required: true` | 跳互動式勾選框 | 送不出 |
+| Playwright 以 `channel="chrome"` 啟動 | 同上 | 同上 | 送不出 |
+| 自己啟動真 Chrome，再 `connect_over_cdp` 接上去 | `required: false` | 不出現 | **正常送出** |
+
+`navigator.webdriver` 三種情況都是 `true`，所以那個屬性不是判準；差別在瀏覽器本體是不是真的 Google Chrome。headless 與有頭都通過，部署機不需要 Xvfb。
+
+### 改動
+
+`src/browser.py` 重寫：用 `subprocess` 啟動 `CHROME_BINARY`（預設 `google-chrome`），帶 `--remote-debugging-port=0`、`--user-data-dir=<PROFILE_DIR>`，等 Chrome 把實際 port 寫進該 profile 的 `DevToolsActivePort` 之後 `connect_over_cdp` 接上去。停止時只終止自己啟動的那一個程序。
+
+port 交給系統挑、每個實例只管自己的程序，這兩點是為了將來多帳號：N 個帳號等於 N 個 profile 目錄配 N 個各自挑 port 的 Chrome，彼此不會搶 port，也不會互相殺掉。
+
+`suno-web install` 從「下載 Playwright Chromium」改成「檢查真 Chrome 在不在」，每台機器少下載 115 MB。`STEALTH_TIMEZONE` 移除：CDP 接上去之後設不了 context 選項，Chrome 直接吃系統時區，留著會誤導。
+
+### 本機真驗收（2026-08-21）
+
+`scripts/smoke_generate.py` 一單走完整條路：送單、輪詢、下載。
+
+| clip | 長度（ffprobe） | downloadable |
+|---|---|---|
+| 7ae070f0 | 204.98 秒 | true |
+| ad1b1e44 | 174.98 秒 | true |
+| 2e5286cc | 59.83 秒（v5.5 preview） | true |
+| 9e63ee04 | 59.83 秒（v5.5 preview） | true |
+
+一單出 4 首、扣 10 點。此帳號的 feed 當下有 16 個舊 clip，`created_at` 過濾精準只挑出這一單的 4 首，Task 11 那個修正在真實情境下站得住。
+
+VIP 這件事要修正先前的假設：preview clip 下載得到，只是長度固定 60 秒，付費買的是完整長度而不是下載權。真正抓不到音檔的 clip 才會標 `downloadable: false`。

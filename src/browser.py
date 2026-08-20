@@ -1,54 +1,128 @@
-"""Playwright 瀏覽器管理（單 worker、persistent context）"""
+"""瀏覽器管理：自己啟動真 Chrome，再用 CDP 接上去。
+
+為什麼不讓 Playwright 直接啟動瀏覽器（2026-08-20 實測）：Suno 對生成動作
+開了 Cloudflare Turnstile 驗證，Playwright 啟動的瀏覽器（不論 channel 是
+chromium 還是 chrome）`navigator.webdriver` 都是 true，Turnstile 會跳出要
+人點的勾選框，生成請求根本送不出去。改成自己起一個真 Chrome、再用 CDP
+接上去之後 `navigator.webdriver` 是 false，Turnstile 靜默通過，生成正常。
+"""
 from __future__ import annotations
 
+import asyncio
+import shutil
+import subprocess
 from pathlib import Path
 
-from playwright.async_api import BrowserContext, Page, async_playwright
+from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 from .config import settings
+
+# Chrome 啟動後會把實際的 debug port 寫進 profile 目錄的這個檔案（第一行）。
+_PORT_FILE = "DevToolsActivePort"
+_PORT_WAIT_SECONDS = 40.0
 
 
 class BrowserManager:
     def __init__(self, headless: bool | None = None,
-                 profile_dir: str | None = None) -> None:
+                 profile_dir: str | None = None,
+                 chrome_binary: str | None = None) -> None:
         self._headless = settings.headless if headless is None else headless
         self._profile_dir = profile_dir or settings.profile_dir
+        self._chrome_binary = chrome_binary or settings.chrome_binary
         self._playwright = None
+        self._browser: Browser | None = None
         self._context: BrowserContext | None = None
         self._page: Page | None = None
+        self._proc: subprocess.Popen | None = None
+
+    def _resolve_chrome(self) -> str:
+        found = shutil.which(self._chrome_binary)
+        if found:
+            return found
+        if Path(self._chrome_binary).is_file():
+            return self._chrome_binary
+        raise RuntimeError(
+            f"找不到 Chrome 執行檔「{self._chrome_binary}」。請安裝 Google Chrome，"
+            "或用環境變數 CHROME_BINARY 指到執行檔的完整路徑。"
+            "不要改用 Playwright 內建的 Chromium，那個過不了 Suno 的 Turnstile 驗證。"
+        )
 
     async def start(self) -> None:
-        Path(self._profile_dir).mkdir(parents=True, exist_ok=True)
+        chrome = self._resolve_chrome()
+        profile = Path(self._profile_dir)
+        profile.mkdir(parents=True, exist_ok=True)
+        port_file = profile / _PORT_FILE
+        port_file.unlink(missing_ok=True)
+
+        args = [
+            chrome,
+            # port 交給系統挑（0），實際值由 Chrome 寫進 DevToolsActivePort。
+            # 固定 port 會讓將來多帳號同時開的時候互相搶，這裡刻意不固定。
+            "--remote-debugging-port=0",
+            f"--user-data-dir={profile}",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--lang=zh-TW",
+        ]
+        if self._headless:
+            args.append("--headless=new")
+        self._proc = subprocess.Popen(
+            args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        port = await self._wait_for_port(port_file)
         self._playwright = await async_playwright().start()
-        self._context = await self._playwright.chromium.launch_persistent_context(
-            self._profile_dir,
-            # channel="chromium"＝完整 chromium。gemini-web 在 .11 的教訓：
-            # 不給 channel 會用 headless_shell 精簡殼，真實網站行為有差、
-            # 過 bot 驗證能力也差，這裡直接沿用完整版。
-            channel="chromium",
-            headless=self._headless,
-            locale="zh-TW",
-            timezone_id=settings.stealth_timezone,
-            # 不覆寫 user_agent：2026-08-20 實測，偽裝成 Chrome/131 會讓
-            # Cloudflare Turnstile 的心跳連續失敗（auth.suno.com/v1/client/verify
-            # 收到 captcha_error=600010），因為 UA 字串與瀏覽器真實指紋對不起來。
-            # 拿掉偽裝後那些失敗歸零。用瀏覽器自己的 UA 就好。
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-            ],
-        )
+        self._browser = await self._playwright.chromium.connect_over_cdp(
+            f"http://127.0.0.1:{port}")
+        self._context = (self._browser.contexts[0] if self._browser.contexts
+                         else await self._browser.new_context())
         self._page = (self._context.pages[0] if self._context.pages
                       else await self._context.new_page())
 
+    async def _wait_for_port(self, port_file: Path) -> int:
+        """等 Chrome 寫出 DevToolsActivePort。等不到就把它收乾淨再報錯。"""
+        deadline = asyncio.get_event_loop().time() + _PORT_WAIT_SECONDS
+        while asyncio.get_event_loop().time() < deadline:
+            if self._proc is not None and self._proc.poll() is not None:
+                await self._kill_process()
+                raise RuntimeError(
+                    "Chrome 啟動後立刻結束了。最常見的原因是同一個 profile 目錄"
+                    f"（{self._profile_dir}）已經被另一個 Chrome 佔用。"
+                )
+            if port_file.is_file():
+                first_line = port_file.read_text(encoding="utf-8").splitlines()[:1]
+                if first_line and first_line[0].strip().isdigit():
+                    return int(first_line[0].strip())
+            await asyncio.sleep(0.2)
+        await self._kill_process()
+        raise RuntimeError(
+            f"等不到 Chrome 的 DevToolsActivePort（{_PORT_WAIT_SECONDS} 秒）。")
+
+    async def _kill_process(self) -> None:
+        """只終止自己起的那一個 Chrome，不掃全域，多帳號才不會互相波及。"""
+        proc = self._proc
+        self._proc = None
+        if proc is None or proc.poll() is not None:
+            return
+        proc.terminate()
+        for _ in range(50):
+            if proc.poll() is not None:
+                return
+            await asyncio.sleep(0.1)
+        proc.kill()
+
     async def stop(self) -> None:
-        if self._context:
-            await self._context.close()
-            self._context = None
+        if self._browser:
+            try:
+                await self._browser.close()
+            except Exception:
+                pass
+            self._browser = None
+        self._context = None
+        self._page = None
         if self._playwright:
             await self._playwright.stop()
             self._playwright = None
-        self._page = None
+        await self._kill_process()
 
     @property
     def page(self) -> Page:
@@ -63,4 +137,5 @@ class BrowserManager:
         return self._context
 
     def is_alive(self) -> bool:
-        return self._page is not None and not self._page.is_closed()
+        return (self._page is not None and not self._page.is_closed()
+                and self._proc is not None and self._proc.poll() is None)

@@ -34,7 +34,9 @@ class Settings:
             "PROFILE_DIR", str(Path(_DEFAULT_DATA_DIR) / "profiles")
         )
         self.suno_url: str = os.getenv("SUNO_URL", "https://suno.com/create")
-        self.stealth_timezone: str = os.getenv("STEALTH_TIMEZONE", "Asia/Taipei")
+        # 真 Chrome 的執行檔。刻意不用 Playwright 內建的 Chromium：那個過不了
+        # Suno 的 Turnstile 驗證，理由見 src/browser.py 的模組說明。
+        self.chrome_binary: str = os.getenv("CHROME_BINARY", "google-chrome")
 
         # 服務
         self.host: str = os.getenv("HOST", "0.0.0.0")

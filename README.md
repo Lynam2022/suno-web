@@ -4,21 +4,22 @@
 
 架構比照 [gemini-web](https://github.com/yazelin/gemini-web)。寫入走 UI（真瀏覽器填表單按 Create），讀取走網路側錄（攔頁面自己在打的 clip feed JSON），DOM 改版只影響寫入那一半。
 
-> **2026-08-20 起，生成被 Cloudflare Turnstile 的互動式驗證擋住，本服務暫時生成不了音樂。** 症狀、排除過程與證據見「已知限制」與 `docs/acceptance-2026-08-20.md`。
+瀏覽器層用的是**系統上真正的 Google Chrome**：本服務自己把它啟動起來（帶 `--remote-debugging-port=0`），再用 CDP 接上去。這一點不能改成 Playwright 內建的 Chromium，理由見「已知限制」。
 
 > **先看這個：** 自動化 Suno 網頁違反 Suno 服務條款，帳號有被封的風險。詳見「已知限制」。
 
 ## 安裝
+
+需要系統上裝好 **Google Chrome**（不是 Chromium，見「已知限制」）。Ubuntu 可以直接裝官方套件，或把 deb 解到自己的目錄再用 `CHROME_BINARY` 指過去。
 
 還沒發佈到 PyPI，目前從原始碼裝：
 
 ```bash
 cd ~/suno-web
 uv sync --extra dev
-uv run suno-web install
 ```
 
-`suno-web install` 會呼叫 `playwright install chromium` 裝瀏覽器。之後所有指令都可以寫成 `uv run suno-web <子指令>`，或直接叫 `.venv/bin/suno-web`。
+`suno-web install` 只檢查 Chrome 在不在、找不到就印安裝方式，不下載任何瀏覽器。之後所有指令都可以寫成 `uv run suno-web <子指令>`，或直接叫 `.venv/bin/suno-web`。
 
 ## 首次登入 Suno
 
@@ -31,7 +32,7 @@ uv run suno-web login
 ## CLI
 
 ```bash
-suno-web install   # 裝 Playwright Chromium
+suno-web install   # 檢查真 Chrome 在不在
 suno-web login     # 人工登入一次
 suno-web serve     # 起 HTTP API（預設 0.0.0.0:8071）
 suno-web health    # 打 /api/health 並印出 JSON
@@ -151,7 +152,7 @@ curl -s http://localhost:8071/api/health
 | `HEADLESS` | 無頭模式。部署時設 `true` | `false` |
 | `PROFILE_DIR` | 登入態的瀏覽器 profile 目錄 | `~/.suno-web/profiles` |
 | `SUNO_URL` | Suno 生成頁網址 | `https://suno.com/create` |
-| `STEALTH_TIMEZONE` | 瀏覽器 context 的時區 | `Asia/Taipei` |
+| `CHROME_BINARY` | 真 Chrome 的執行檔，找不到就給明確錯誤 | `google-chrome` |
 | `HOST` | 監聽位址 | `0.0.0.0` |
 | `PORT` | 服務埠 | `8071` |
 | `QUEUE_MAX_SIZE` | 最大排隊單數，滿了回 429 | `10` |
@@ -193,12 +194,12 @@ V1 沒有瀏覽器自動自癒：建議外部監控定期打 `/api/health`，看
 - 一單生成出 2 首 clip，扣 10 點。
 - 免費方案是月配額制（實測帳號 100 點／月，等於一個月 10 單）。
 - 點數用完之後 Create 按鈕照樣按得下去，但 Suno 後端不會真的排入生成，job 會以 `submit_failed` 收場，`error_message` 是「按了 Create 但 feed 沒出現新 clip」。要判斷是不是這個原因，看 `/api/health` 的 `credits`。
-- 免費帳號有時會出現 VIP 才能下載的 clip，這種 clip 標 `downloadable: false`。
+- 一單實測出 4 首：2 首完整長度，另外 2 首是 v5.5 preview，長度固定 60 秒、畫面上掛「Upgrade for full song」。preview 一樣下載得到，買的是完整長度而不是下載權。真的抓不到音檔的 clip 才會標 `downloadable: false`。
 - wav 下載要 Pro，本服務只處理 mp3。
 
 ## 已知限制
 
-- **生成目前被 Cloudflare Turnstile 擋住（2026-08-20 起實測）。** Suno 在按下 Create 時會先打 `POST /api/c/check`，帶 `{"ctype":"generation"}`，收到 `{"required": true, "captcha_version": 2}`，接著在畫面上跳出「驗證您是人類」的互動式勾選框，Create 停在轉圈狀態，生成請求不會送出。程式化點擊那個勾選框不被接受，換帳號、換全新 profile、改有頭視窗都一樣。這是平台端的變更，不是設定問題。**在 Suno 放寬這道驗證之前，本服務生成不了音樂**，其餘功能（登入、表單、feed 側錄、下載、job API、CLI）都是好的。同一天稍早本服務還能連續生成三單，所以這也可能是短期的風險升級而非永久政策，值得隔一段時間重試。
+- **一定要用真的 Google Chrome，不能用 Playwright 內建的 Chromium。** Suno 在按下 Create 時會先打 `POST /api/c/check` 問要不要驗證碼。用 Playwright 內建 Chromium 時它回 `{"required": true}` 並跳出 Cloudflare Turnstile 的互動式勾選框，程式化點擊不被接受，生成請求送不出去；改用真 Chrome（本服務自己啟動、再用 CDP 接上）之後同一個端點回 `{"required": false}`，生成正常送出。`channel="chrome"` 讓 Playwright 去啟動也不行，必須自己起、自己接。實測記錄見 `docs/acceptance-2026-08-20.md` 第四、五節。
 - **自動化 Suno 網頁違反 Suno 服務條款，帳號有被封的風險。** 這是明講的取捨，要不要用請自己評估。
 - 併行度 1。單帳號單 worker，一次跑一單，其餘排隊。
 - 一單通常 2 到 4 分鐘，job timeout 預設 600 秒。

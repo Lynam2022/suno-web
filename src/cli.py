@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -32,10 +33,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _install() -> None:
-    print("安裝 Playwright Chromium...")
-    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"],
-                   check=True)
-    print("完成。接著跑 suno-web login 登入 Suno。")
+    """檢查真 Chrome 在不在。不下載 Playwright 內建的 Chromium：本服務是
+    自己啟動真 Chrome 再用 CDP 接上去，內建那顆過不了 Suno 的驗證。"""
+    from .config import settings
+
+    found = shutil.which(settings.chrome_binary)
+    if found:
+        print(f"找到 Chrome：{found}")
+        print("接著跑 suno-web login 登入 Suno。")
+        return
+    print(f"找不到 Chrome 執行檔「{settings.chrome_binary}」。")
+    print("Ubuntu 可以這樣裝：")
+    print("  wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb")
+    print("  sudo apt install ./google-chrome-stable_current_amd64.deb")
+    print("沒有 root 的機器可以解到自己的目錄，再用環境變數指過去：")
+    print("  dpkg-deb -x google-chrome-stable_current_amd64.deb ~/opt/chrome")
+    print("  CHROME_BINARY=~/opt/chrome/opt/google/chrome/chrome")
+    sys.exit(1)
 
 
 async def _login() -> None:
