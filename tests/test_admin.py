@@ -128,3 +128,12 @@ def test_admin_session_can_fetch_audio_but_stranger_cannot(client, tmp_path):
     assert client.get(f"/api/jobs/{job_id}/files/c1.mp3").status_code == 403
     assert client.get(f"/api/jobs/{job_id}/files/c1.mp3",
                       headers={"x-api-key": raw}).status_code == 200
+
+
+def test_key_times_render_as_local_not_raw_utc(client):
+    """資料庫存 UTC ISO,頁面要轉本地時間顯示(user 在 UTC+8)。"""
+    login(client)
+    client.post("/admin/keys", data={"name": "時間測試"}, follow_redirects=False)
+    body = client.get("/admin/keys").text
+    assert "+00:00" not in body
+    assert "時間測試" in body

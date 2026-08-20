@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import html
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Form, Request
@@ -76,6 +77,19 @@ a.link{color:var(--accent)}
 
 def _esc(v: Any) -> str:
     return html.escape(str(v if v is not None else ""))
+
+
+def _fmt_iso(value: str | None) -> str:
+    """資料庫存的是 UTC ISO 字串，顯示要轉成本地時間（這台是 UTC+8）。"""
+    if not value:
+        return "-"
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return value
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone().strftime("%m-%d %H:%M")
 
 
 def _fmt_time(ts: float | None) -> str:
@@ -192,8 +206,8 @@ def create_admin_router(*, settings: Settings, store: JobStore,
             toggle_label = "停用" if k["enabled"] else "啟用"
             rows.append(f"""<tr><td>{_esc(k['name'])}</td><td><code>{_esc(k['id'])}</code></td>
 <td>{state}</td><td>{_esc(k['requests_count'])}</td>
-<td class="muted">{_esc(k['last_used_at'] or '未用過')}</td>
-<td class="muted">{_esc(k['created_at'])}</td>
+<td class="muted">{_esc(_fmt_iso(k['last_used_at']) if k['last_used_at'] else '未用過')}</td>
+<td class="muted">{_esc(_fmt_iso(k['created_at']))}</td>
 <td>
 <form class="inline" method="post" action="{url(f"/admin/keys/{k['id']}/{toggle}")}"><button class="ghost">{toggle_label}</button></form>
 <form class="inline" method="post" action="{url(f"/admin/keys/{k['id']}/delete")}" onsubmit="return confirm('刪掉就救不回來,確定?')"><button class="ghost">刪除</button></form>
