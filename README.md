@@ -58,10 +58,17 @@ suno-web generate "a slow jazzy piano interlude" --instrumental -o out/
 | `--title` | 歌名，只在 Custom 模式會送出 |
 | `--instrumental` | 純音樂 |
 | `-o, --output` | 輸出目錄，預設當前目錄 |
-| `--server` | 服務位址，預設 `http://localhost:8071` |
+| `--server` | 服務位址，預設吃環境變數 `SUNO_WEB_SERVER`，沒設就是 `http://localhost:8071` |
 | `--api-key` | API 金鑰，預設讀環境變數 `SUNO_WEB_API_KEY` |
 
-`health` 也吃 `--server`。
+`health` 也吃 `--server`。服務跑在別台機器時，設一次環境變數就不必每次打參數：
+
+```bash
+export SUNO_WEB_SERVER=http://192.168.11.11:8071
+export SUNO_WEB_API_KEY=<那台服務 .env 裡的其中一把 API_KEYS>
+suno-web health
+suno-web generate "a gentle lo-fi beat" -o out/
+```
 
 ## HTTP API
 

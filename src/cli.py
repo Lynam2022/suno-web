@@ -12,6 +12,12 @@ import time
 from pathlib import Path
 
 
+def _default_server() -> str:
+    """服務位址預設吃 SUNO_WEB_SERVER，沒設才用本機。服務跑在別台機器時
+    （例如部署在 .11），設一次環境變數就不用每個指令都打 --server。"""
+    return os.getenv("SUNO_WEB_SERVER", "http://localhost:8071")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="suno-web", description="Suno 網頁版自動化")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -19,7 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("login", help="開瀏覽器人工登入 Suno")
     sub.add_parser("serve", help="啟動 HTTP API")
     p_health = sub.add_parser("health", help="檢查服務狀態")
-    p_health.add_argument("--server", default="http://localhost:8071")
+    p_health.add_argument("--server", default=_default_server())
     g = sub.add_parser("generate", help="生成音樂（需要 serve 在跑）")
     g.add_argument("prompt", nargs="?", default="", help="Simple 模式描述")
     g.add_argument("--lyrics-file", help="Custom 模式：歌詞檔路徑")
@@ -27,7 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--title", help="Custom 模式：歌名")
     g.add_argument("--instrumental", action="store_true", help="純音樂")
     g.add_argument("-o", "--output", default=".", help="輸出目錄")
-    g.add_argument("--server", default="http://localhost:8071")
+    g.add_argument("--server", default=_default_server())
     g.add_argument("--api-key", default=os.getenv("SUNO_WEB_API_KEY", ""))
     return parser
 
