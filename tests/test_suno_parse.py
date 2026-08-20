@@ -1,3 +1,4 @@
+import pytest
 import json
 import time
 from datetime import datetime, timezone
@@ -151,3 +152,29 @@ def test_is_freshly_created_falls_back_to_before_set_when_created_at_unparseable
 def test_is_freshly_created_unknown_clip_id_returns_false():
     runner = SunoRunner(None, None)
     assert runner._is_freshly_created("missing", before=set(), submit_time=time.time()) is False
+
+
+def test_captcha_required_turns_into_its_own_error_code():
+    """被要求驗證碼時要講明白,不要含糊回「feed 沒出現新 clip」。"""
+    import asyncio
+
+    from src.jobs import GenerationError
+    from src.suno import SunoRunner
+
+    class FakeBrowser:
+        page = None
+
+    class FakeSettings:
+        suno_url = "https://suno.com/create"
+
+    runner = SunoRunner(FakeBrowser(), FakeSettings())
+    runner.captcha_required = True
+
+    with pytest.raises(GenerationError) as e:
+        asyncio.run(runner._wait_new_ids(set(), 0.0, timeout=0.01))
+    assert e.value.code == "captcha_required"
+
+    runner.captcha_required = False
+    with pytest.raises(GenerationError) as e2:
+        asyncio.run(runner._wait_new_ids(set(), 0.0, timeout=0.01))
+    assert e2.value.code == "submit_failed"

@@ -111,6 +111,10 @@ class SunoRunner:
         self._sniffer_tasks: set = set()
         self.logged_in: bool | None = None
         self.last_credits: int | None = None
+        # Suno 按下 Create 前會先問要不要驗證碼。required=true 代表會跳出
+        # 要人點的 Turnstile，程式化點擊過不了，生成請求根本送不出去。
+        # 實測這是綁帳號信任度的：有生成歷史的老帳號 false，新帳號 true。
+        self.captcha_required: bool | None = None
 
     # ---- 側錄 ----
 
@@ -132,6 +136,13 @@ class SunoRunner:
 
     async def _on_response(self, response) -> None:
         url = response.url
+        if "/api/c/check" in url:
+            try:
+                body = await response.json()
+            except Exception:
+                body = {}
+            if isinstance(body, dict) and "required" in body:
+                self.captcha_required = bool(body["required"])
         is_feed = any(s in url for s in selectors.FEED_URL_SUBSTRINGS)
         is_credits = any(s in url for s in selectors.CREDITS_URL_SUBSTRINGS)
         if not (is_feed or is_credits):
@@ -285,6 +296,13 @@ class SunoRunner:
                 return {cid for cid in self._clips
                         if self._is_freshly_created(cid, before, submit_time)}
             await asyncio.sleep(0.5)
+        if self.captcha_required:
+            raise GenerationError(
+                "captcha_required",
+                "Suno 對這個帳號要求 Cloudflare 驗證碼（/api/c/check 回 "
+                "required:true），程式點不過那道勾選框，生成送不出去。"
+                "實測這綁帳號信任度：先用真人開的瀏覽器手動生一兩單，"
+                "之後通常就會變成不要求。")
         raise GenerationError("submit_failed", "按了 Create 但 feed 沒出現新 clip")
 
     async def _wait_terminal(self, page: Page, ids: set[str],
