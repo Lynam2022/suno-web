@@ -163,6 +163,32 @@ curl -s http://localhost:8071/api/health
 
 `.env` 的 `API_KEYS` 仍然有效，在管理台是唯讀顯示（要改就改 `.env` 再重啟）。只要靜態或動態任一邊有金鑰，`/api/generate` 與 `/api/jobs/*` 就強制驗證。
 
+## 維運腳本
+
+```bash
+python3 scripts/checkup.py           # 唯讀健檢：服務、近 24 小時成功率、失敗明細、音檔佔用
+python3 scripts/canary.py --dry-run  # 金絲雀：只檢查、不開 issue
+python3 scripts/canary.py            # 壞了就開一張帶 canary label 的 GitHub issue
+```
+
+金絲雀刻意**不生成**：一單扣 10 點、一個月只有 100 點，每天真生一單根本跑不起來。改成檢查送得出去之前的每個前提：登入態、五個關鍵 selector、點數夠不夠、有沒有被要求驗證碼。這四項正是實際壞過的地方。
+
+排程（每天早上八點）：
+
+```
+0 8 * * * cd ~/suno-web && .venv/bin/python scripts/canary.py >> ~/suno-web/canary.log 2>&1
+```
+
+## AI Agent 整合
+
+`suno-web install` 會偵測 Claude Code 與 Gemini CLI，把 slash command 裝進 `~/.claude/commands/suno-web/` 與 `~/.gemini/commands/suno-web/`：
+
+```
+/suno 幫我做一段寫程式時聽的背景音樂
+```
+
+指令會把敘述擴寫成英文音樂 prompt、送單、等它跑完、把 mp3 存下來，並在生成前提醒還剩幾單額度。
+
 ## 環境變數
 
 放在 repo 根目錄的 `.env`，範本見 `.env.example`。
@@ -244,7 +270,7 @@ uv sync --extra dev
 uv run pytest -q
 ```
 
-64 個測試，另有 1 個標了 `browser` 的測試預設跳過（那個要真的開 Chromium）。瀏覽器層在單元測試裡用假 worker 注入，不碰網路。
+65 個測試，另有 1 個標了 `browser` 的測試預設跳過（那個要真的開 Chromium）。瀏覽器層在單元測試裡用假 worker 注入，不碰網路。
 
 ## 授權
 

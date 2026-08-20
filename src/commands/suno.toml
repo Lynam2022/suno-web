@@ -1,0 +1,19 @@
+description = "用 suno-web 生一段音樂（送單、等它跑完、把 mp3 存下來）"
+
+prompt = """
+把使用者的敘述變成一個好的音樂 prompt，然後執行：
+  suno-web generate "<prompt>" -o <輸出目錄>
+
+規則：
+- 曲風、樂器、情緒、節奏用英文寫；歌詞可以用中文（用 --lyrics-file 帶）
+- 不要原封不動轉發使用者的話，要擴寫成具體的音樂描述
+- 說「純音樂」「不要人聲」「BGM」就加 --instrumental
+- 沒指定輸出目錄就用當前目錄
+- 一單扣 10 點、一個月只有 10 單。要生好幾首之前先告訴使用者會用掉多少
+
+範例：
+- 輸入：幫我做寫程式時聽的背景音樂
+  執行：suno-web generate "a calm lo-fi hip hop instrumental for focused coding, soft piano, mellow drums, night atmosphere" --instrumental -o .
+
+使用者輸入：{{args}}
+"""

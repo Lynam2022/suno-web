@@ -38,6 +38,28 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _install_commands() -> None:
+    """偵測 Claude Code 與 Gemini CLI，把 slash command 裝進去（同 gemini-web）。"""
+    src = Path(__file__).parent / "commands"
+    if not src.is_dir():
+        return
+    installed = []
+    for home, ext, label in ((Path.home() / ".claude", "*.md", "Claude Code"),
+                             (Path.home() / ".gemini", "*.toml", "Gemini CLI")):
+        if not home.is_dir():
+            continue
+        dest = home / "commands" / "suno-web"
+        dest.mkdir(parents=True, exist_ok=True)
+        for f in src.glob(ext):
+            shutil.copy2(f, dest / f.name)
+        installed.append(f"{label} → {dest}")
+    if installed:
+        print("slash command 已安裝：")
+        for line in installed:
+            print(f"  {line}")
+        print("用法：/suno 想要什麼樣的音樂")
+
+
 def _install() -> None:
     """檢查真 Chrome 在不在。不下載 Playwright 內建的 Chromium：本服務是
     自己啟動真 Chrome 再用 CDP 接上去，內建那顆過不了 Suno 的驗證。"""
@@ -46,6 +68,7 @@ def _install() -> None:
     found = shutil.which(settings.chrome_binary)
     if found:
         print(f"找到 Chrome：{found}")
+        _install_commands()
         print("接著跑 suno-web login 登入 Suno。")
         return
     print(f"找不到 Chrome 執行檔「{settings.chrome_binary}」。")
