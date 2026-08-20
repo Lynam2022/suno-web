@@ -1,10 +1,12 @@
 # suno-web
 
-用 Playwright 自動化 Suno 網頁版（`suno.com/create`），把音樂生成包成 job 式 HTTP API 與 CLI：送單立刻拿到 `job_id`，輪詢到 `done` 之後下載 mp3。走的是登入帳號的網頁額度，Suno 沒有官方 API，也不按次計費。
+自動化 Suno 網頁版（`suno.com/create`），把音樂生成包成 job 式 HTTP API 與 CLI：送單立刻拿到 `job_id`，輪詢到 `done` 之後下載 mp3。走的是登入帳號的網頁額度，Suno 沒有官方 API，也不按次計費。
 
 架構比照 [gemini-web](https://github.com/yazelin/gemini-web)。寫入走 UI（真瀏覽器填表單按 Create），讀取走網路側錄（攔頁面自己在打的 clip feed JSON），DOM 改版只影響寫入那一半。
 
-瀏覽器層用的是**系統上真正的 Google Chrome**：本服務自己把它啟動起來（帶 `--remote-debugging-port=0`），再用 CDP 接上去。這一點不能改成 Playwright 內建的 Chromium，理由見「已知限制」。
+瀏覽器層用的是**系統上真正的 Google Chrome**：本服務自己用 subprocess 把它啟動起來（帶 `--remote-debugging-port=0`），再用 CDP 接上去。
+
+Playwright 仍然在用，但角色只剩 **CDP 客戶端**：`connect_over_cdp` 接上之後，靠它做 locator 的自動等待與重試、`page.on("response")` 側錄 feed、帶著瀏覽器 cookie 下載音檔。**啟動瀏覽器那一半刻意不給它做**，因為 Playwright 啟動的瀏覽器（不論 `channel` 是 chromium 還是 chrome）過不了 Suno 的 Cloudflare Turnstile。理由與對照實驗見「已知限制」。
 
 > **先看這個：** 自動化 Suno 網頁違反 Suno 服務條款，帳號有被封的風險。詳見「已知限制」。
 
