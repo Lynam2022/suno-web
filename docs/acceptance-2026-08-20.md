@@ -17,10 +17,10 @@ Task 11 煙霧測試中耗盡（30 → 0），本輪驗收依 controller 裁決�
   （prompt="a gentle rainy afternoon lo-fi beat"）過程中各踩到一個
   production 缺陷並修正：
   1. `before` 快照不可靠（`/create` 頁面不會主動打 feed API）導致把
-     帳號歷史舊 clip 誤判成新生成 —— 改用伺服器 `created_at` 對比
+     帳號歷史舊 clip 誤判成新生成，改用伺服器 `created_at` 對比
      `submit_time` 過濾。
   2. 被動側錄看不到 `streaming -> complete`（真正的轉換走前端攔不到的
-     即時管道，推測 WebSocket/SSE）導致 `_wait_terminal` 永遠卡住 ——
+     即時管道，推測 WebSocket/SSE）導致 `_wait_terminal` 永遠卡住，
      改為每 20 秒主動 `page.reload()` 強迫重新側錄。
 - 第 3 次（prompt="a slow jazzy piano interlude"）兩個修正同時生效，
   端到端全綠：
@@ -53,7 +53,7 @@ $ uv run pytest -q
 ```
 
 （Task 11 完成時的既有基線，本輪未新增／修改任何測試或 production
-程式碼 —— serve 接線本身沒有故障，見下方「本輪未觸發修正」。）
+程式碼。serve 接線本身沒有故障，見下方「本輪未觸發修正」。）
 
 ### 步驟 1：啟動真服務並健康檢查
 
@@ -69,10 +69,10 @@ $ curl -s http://localhost:8071/api/health
  "logged_in":null,"credits":null}
 ```
 
-- `browser_alive: true` —— BrowserManager 在 `lifespan` 啟動時成功
+- `browser_alive: true`：BrowserManager 在 `lifespan` 啟動時成功
   開出 headless Chromium，且 persistent profile（Task 8 人工登入的
   session）能被重新載入而不炸例外。
-- `logged_in: null`、`credits: null` —— 這是**預期行為**，不是缺陷：
+- `logged_in: null`、`credits: null`：這是**預期行為**，不是缺陷：
   `SunoRunner.logged_in` 只有在 `_ensure_on_create_page()` 真的被呼叫
   （即第一個 job 開始跑）時才會被設成 `True`/`False`
   （`src/suno.py:111,173-175`）；`last_credits` 同理，只有側錄到
@@ -82,7 +82,7 @@ $ curl -s http://localhost:8071/api/health
   `logged_in` 也適用同一套「懶惰觀察」設計，`/api/health` 把兩者
   當合法的 `None` 值處理，行為與既有測試（`test_main.py`）的假設一致。
 - 送出第一個 job、真的導覽過 `/create` 頁面之後，`/api/health` 才變成
-  `logged_in: true`、`credits: 0`（見步驟 3 記錄）—— `credits: 0`
+  `logged_in: true`、`credits: 0`（見步驟 3 記錄）。`credits: 0`
   與 Task 11 記錄的「本月免費額度已耗盡」完全吻合。
 
 ### 步驟 2：Auth／驗證檢查（不花 credits）
@@ -160,7 +160,7 @@ $ curl -s -X POST http://localhost:8071/api/generate \
   `submit_failed`）。
 - 這個結果與「credits 已耗盡」的實況吻合：Create 按鈕仍可點擊，但
   帳號沒有點數，Suno 後端沒有真的排入生成、feed 自然不會出現新 clip
-  —— 屬於 spec 要求「看得出來」的分類失敗情境的真實樣貌。
+  屬於 spec 要求「看得出來」的分類失敗情境的真實樣貌。
 
 **Worker 存活驗證**：緊接著再送出第二單（不同 prompt）：
 
@@ -202,19 +202,19 @@ serve 接線（BrowserManager + SunoRunner + JobQueue + FastAPI 在真
 
 以下項目本輪因免費 credits 已耗盡（見上方一、二節）無法驗證，延後：
 
-1. **Happy-path：Simple 模式經 HTTP API／CLI 真生成到底**——從
+1. **Happy-path：Simple 模式經 HTTP API／CLI 真生成到底**：從
    `POST /api/generate` 送出、輪詢到 `status: "done"`、下載
    `audio_url`、ffprobe 驗證檔案，走完整條 production 路徑（Task 11
    驗證過的是 `SunoRunner.run()` 本身，但沒有經過 FastAPI + JobQueue
    + CLI `_generate()` 這條對外路徑的真流量）。
-2. **Happy-path：Custom + instrumental 模式**——Task 11 三次生成皆為
+2. **Happy-path：Custom + instrumental 模式**：Task 11 三次生成皆為
    Simple 模式，Custom（歌詞／曲風／歌名）與 instrumental 開關兩條
    分支目前只有 Task 9/10 的偵察與程式邏輯覆蓋，未經真實生成驗證。
-3. **VIP-lock 觀察**——spec 提到免費帳號有時會出現 `downloadable:
+3. **VIP-lock 觀察**：spec 提到免費帳號有時會出現 `downloadable:
    false` 的 VIP 鎖 clip；Task 11 三次生成共 6 首新歌全數
    `downloadable: true`，未觀察到此情境，job 結果「非整單 error、
    只有該 clip 標 false」的分支邏輯未經真實資料驗證。
-4. **`error` 終態的下游行為觀察**——本次雖已在真服務上觀察到
+4. **`error` 終態的下游行為觀察**：本次雖已在真服務上觀察到
    `error` / `submit_failed`（credits 耗盡導致 Create 後無新 clip），
    但 `_download_all()` 對 `status != "complete"` 的 clip 只建立
    metadata、不下載檔案這條路徑，以及其他可能的錯誤終態字串（例如
@@ -228,3 +228,42 @@ serve 接線（BrowserManager + SunoRunner + JobQueue + FastAPI 在真
   恢復成本輪開始前「無 `.env`」的原狀。
 - 兩單失敗 job（`d9025d66e20a`、`dc2af9372cc6`）皆未產生任何檔案落地
   （`~/.suno-web/generated/` 下確認沒有對應目錄），無須額外清檔案。
+
+## 四、後續：Turnstile 擋住生成（2026-08-20 晚間）
+
+當天稍晚換帳號重測時，生成整條路被擋住，症狀與證據如下。
+
+### 現象
+
+`scripts/smoke_generate.py` 以 `submit_failed`（「按了 Create 但 feed 沒出現新 clip」）失敗。表單填得好好的、Create 鈕 `visible=True enabled=True`、點得下去，但伺服器端完全沒收到生成：連跑數次之後帳號的 `total_credits_left` 仍是 90、`monthly_usage` 仍是 10，一點都沒扣。
+
+### 根因
+
+按下 Create 時，前端先打：
+
+```
+POST https://studio-api-prod.suno.com/api/c/check
+  送出 {"ctype":"generation"}
+  回應 {"required": true, "captcha_version": 2}
+```
+
+接著畫面跳出 Cloudflare Turnstile 的互動式勾選框（「驗證您是人類」），Create 鈕停在轉圈。生成請求始終沒有送出。
+
+### 排除掉的可能
+
+| 假設 | 驗證方式 | 結果 |
+|---|---|---|
+| IP 被封 | `curl https://suno.com` | 200，API 回 401，網路層正常 |
+| 帳號沒點數 | 側錄 `/api/billing/info/` | `total_credits_left: 90`，有點數 |
+| selector 過期 | 逐一數命中數與可見性 | 五個關鍵 selector 都命中 1 個可見元素，填字回讀正確 |
+| 新帳號信任度低 | 換回舊帳號 profile 重測 | 一樣擋，與帳號無關 |
+| headless 被偵測 | 改有頭視窗重測 | 一樣擋 |
+| 程式化勾選驗證碼 | frame_locator 與座標點擊兩種 | 勾選框維持未勾，不被接受 |
+
+### 順帶修掉的真缺陷
+
+偽裝 User-Agent 為 Chrome/131 會讓 `auth.suno.com/v1/client/verify` 持續收到 `captcha_error=600010`（Turnstile 挑戰失敗），因為 UA 字串與瀏覽器真實指紋對不起來。拿掉偽裝後這些失敗歸零（commit 6dc2e72）。這修正並不能解除上面那道互動式驗證，但它本身是對的。
+
+### 結論
+
+生成路徑在 Suno 端被關掉，不是本專案的設定或程式問題。同一天稍早還連續生成過三單，所以有可能是短期風險升級而非永久政策。其餘功能全數可用。部署 .11 暫緩，等驗證放寬後再重跑本文件第三節列的延後項目。

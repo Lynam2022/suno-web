@@ -2,7 +2,9 @@
 
 用 Playwright 自動化 Suno 網頁版（`suno.com/create`），把音樂生成包成 job 式 HTTP API 與 CLI：送單立刻拿到 `job_id`，輪詢到 `done` 之後下載 mp3。走的是登入帳號的網頁額度，Suno 沒有官方 API，也不按次計費。
 
-架構比照 [gemini-web](https://github.com/yazelin/gemini-web)。寫入走 UI（真瀏覽器填表單按 Create，自然通過 Cloudflare Turnstile），讀取走網路側錄（攔頁面自己在打的 clip feed JSON），DOM 改版只影響寫入那一半。
+架構比照 [gemini-web](https://github.com/yazelin/gemini-web)。寫入走 UI（真瀏覽器填表單按 Create），讀取走網路側錄（攔頁面自己在打的 clip feed JSON），DOM 改版只影響寫入那一半。
+
+> **2026-08-20 起，生成被 Cloudflare Turnstile 的互動式驗證擋住，本服務暫時生成不了音樂。** 症狀、排除過程與證據見「已知限制」與 `docs/acceptance-2026-08-20.md`。
 
 > **先看這個：** 自動化 Suno 網頁違反 Suno 服務條款，帳號有被封的風險。詳見「已知限制」。
 
@@ -196,6 +198,7 @@ V1 沒有瀏覽器自動自癒：建議外部監控定期打 `/api/health`，看
 
 ## 已知限制
 
+- **生成目前被 Cloudflare Turnstile 擋住（2026-08-20 起實測）。** Suno 在按下 Create 時會先打 `POST /api/c/check`，帶 `{"ctype":"generation"}`，收到 `{"required": true, "captcha_version": 2}`，接著在畫面上跳出「驗證您是人類」的互動式勾選框，Create 停在轉圈狀態，生成請求不會送出。程式化點擊那個勾選框不被接受，換帳號、換全新 profile、改有頭視窗都一樣。這是平台端的變更，不是設定問題。**在 Suno 放寬這道驗證之前，本服務生成不了音樂**，其餘功能（登入、表單、feed 側錄、下載、job API、CLI）都是好的。同一天稍早本服務還能連續生成三單，所以這也可能是短期的風險升級而非永久政策，值得隔一段時間重試。
 - **自動化 Suno 網頁違反 Suno 服務條款，帳號有被封的風險。** 這是明講的取捨，要不要用請自己評估。
 - 併行度 1。單帳號單 worker，一次跑一單，其餘排隊。
 - 一單通常 2 到 4 分鐘，job timeout 預設 600 秒。
