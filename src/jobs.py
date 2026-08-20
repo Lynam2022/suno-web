@@ -59,6 +59,9 @@ class Job:
         }
 
 
+# 保留幾筆 job 記錄。管理台歷史頁只看 200 筆，留 1000 筆已經很寬鬆。
+_KEEP_JOBS = 1000
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
@@ -88,7 +91,23 @@ class JobStore:
     def create(self, params: dict) -> Job:
         job = Job(id=uuid.uuid4().hex[:12], params=params, created_at=time.time())
         self.save(job)
+        self.prune(_KEEP_JOBS)
         return job
+
+    def prune(self, keep: int) -> int:
+        """只留最新 keep 筆 job 記錄，回報刪了幾筆。
+
+        每次建立 job 時順手跑一次（做法同 gemini-web 的 requests 表）：不裁切
+        的話這張表會一直長，管理台的歷史頁反正也只看最近 200 筆。音檔另外由
+        cleanup_expired 依保留天數處理，兩者互不影響。
+        """
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM jobs WHERE id NOT IN"
+                " (SELECT id FROM jobs ORDER BY created_at DESC LIMIT ?)",
+                (keep,))
+            self._conn.commit()
+            return cur.rowcount or 0
 
     def save(self, job: Job) -> None:
         with self._lock:
@@ -237,12 +256,15 @@ class JobQueue:
                         pass
 
 
-def cleanup_expired(generated_dir: str, retention_days: int) -> None:
-    """刪掉超過保留天數的 job 目錄。生成前順手呼叫，不另開排程。"""
+def cleanup_expired(generated_dir: str, retention_days: int) -> int:
+    """刪掉超過保留天數的 job 目錄，回報刪了幾個。生成前順手呼叫，不另開排程。"""
     root = Path(generated_dir)
     if not root.is_dir():
-        return
+        return 0
     cutoff = time.time() - retention_days * 86400
+    deleted = 0
     for child in root.iterdir():
         if child.is_dir() and child.stat().st_mtime < cutoff:
             shutil.rmtree(child, ignore_errors=True)
+            deleted += 1
+    return deleted

@@ -18,7 +18,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from . import admin_db
 from .config import Settings
-from .jobs import Job, JobQueue, JobStore, QueueFullError
+from .jobs import (Job, JobQueue, JobStore, QueueFullError,
+                   cleanup_expired)
 from .security import (constant_equals, create_admin_session,
                        verify_admin_session)
 
@@ -420,17 +421,33 @@ def create_admin_router(*, settings: Settings, store: JobStore,
     # ---- 歷史 ----
 
     @router.get("/admin/history", response_class=HTMLResponse)
-    async def history(request: Request):
+    async def history(request: Request, swept: int | None = None):
         user = _user(request)
         if not user:
             return _to_login()
         rows = "".join(_history_row(j, url) for j in store.list_recent(200))
+        note = (f'<p><span class="pill ok">已清掉 {swept} 個過期的 job 目錄</span></p>'
+                if swept is not None else "")
         return _page(title="歷史", active="history", user=user,
                      subtitle="近 200 筆 job。音檔可以直接在這頁播。",
                      body=f"""<div class="card"><h2>近期 job</h2><table>
 <tr><th>時間</th><th>金鑰</th><th>內容</th><th>狀態</th><th>耗時</th><th>產出</th></tr>
 {rows or '<tr><td colspan="6" class="muted">還沒有任何 job</td></tr>'}
-</table></div>""")
+</table></div>
+<div class="card"><h2>清理</h2>
+<p class="hint">音檔保留 {settings.audio_retention_days} 天，每次生成時會順手清掉過期的，
+這顆按鈕是要立刻清的時候用。job 記錄只留最新 1000 筆，建立新 job 時自動裁切。</p>
+{note}<form method="post" action="{url('/admin/cleanup')}">
+<button class="ghost">立刻清一次過期音檔</button></form></div>""")
+
+    @router.post("/admin/cleanup")
+    async def cleanup_now(request: Request):
+        if not _user(request):
+            return _to_login()
+        deleted = cleanup_expired(settings.generated_dir,
+                                  settings.audio_retention_days)
+        return RedirectResponse(url(f"/admin/history?swept={deleted}"),
+                                status_code=303)
 
     return router
 

@@ -46,3 +46,27 @@ def test_to_api_shapes():
     assert api["clips"][0]["image_url"] == "/api/jobs/abcabcabcabc/files/fakeclip0001.jpeg"
     assert api["clips"][1]["downloadable"] is False
     assert "audio_url" not in api["clips"][1]
+
+
+def test_prune_keeps_only_the_newest(tmp_path):
+    """job 記錄不裁切的話 jobs.db 會無限長。"""
+    store = JobStore(str(tmp_path / "jobs.db"))
+    ids = []
+    for i in range(6):
+        job = store.create({"n": i})
+        job.created_at = 1000.0 + i          # 排序用,越後面越新
+        store.save(job)
+        ids.append(job.id)
+
+    assert store.prune(3) == 3
+    assert store.get(ids[-1]) is not None    # 最新的留著
+    assert store.get(ids[0]) is None         # 最舊的被裁掉
+    assert len(store.list_recent(100)) == 3
+
+
+def test_create_prunes_automatically(tmp_path, monkeypatch):
+    monkeypatch.setattr("src.jobs._KEEP_JOBS", 2)
+    store = JobStore(str(tmp_path / "jobs.db"))
+    for i in range(5):
+        store.create({"n": i})
+    assert len(store.list_recent(100)) <= 2

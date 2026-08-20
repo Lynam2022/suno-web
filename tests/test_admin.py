@@ -159,3 +159,21 @@ def test_login_page_has_autofill_override_and_remember_box(client):
     body = client.get("/admin/login").text
     assert "-webkit-autofill" in body
     assert 'name="remember"' in body
+
+
+def test_manual_cleanup_reports_how_many_it_deleted(client, tmp_path, monkeypatch):
+    """歷史頁那顆清理按鈕:真的刪過期目錄,並把數量顯示出來。"""
+    import os
+    import time as _t
+    login(client)
+    gen = tmp_path / "generated"
+    old, fresh = gen / "oldjob", gen / "freshjob"
+    old.mkdir(parents=True)
+    fresh.mkdir(parents=True)
+    stale = _t.time() - 30 * 86400
+    os.utime(old, (stale, stale))
+
+    r = client.post("/admin/cleanup", follow_redirects=False)
+    assert "swept=1" in r.headers["location"]
+    assert not old.exists() and fresh.exists()
+    assert "已清掉 1 個過期的 job 目錄" in client.get("/admin/history?swept=1").text

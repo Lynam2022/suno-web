@@ -131,7 +131,7 @@ curl -s -H "x-api-key: YOUR_KEY" http://localhost:8071/api/jobs/d9025d66e20a
 - `clips`：這一單新生出來的全部 clip。`audio_url` 與 `image_url` 只有檔案真的存下來才會出現。
 - VIP 鎖住的 clip 標 `downloadable: false`、只留 metadata，整單不算失敗（本輪驗收沒有遇到這種 clip，見「已知限制」）。
 - 失敗時 `error` 是錯誤碼、`error_message` 是一句人看得懂的說明。錯誤碼表在 [AGENTS.md](AGENTS.md)。
-- job 記錄寫在 `~/.suno-web/jobs.db`，服務重啟後查舊 job 仍拿得到記錄與已經存下來的音檔。
+- job 記錄寫在 `~/.suno-web/jobs.db`，服務重啟後查舊 job 仍拿得到記錄與已經存下來的音檔。記錄只留最新 1000 筆，建立新 job 時自動裁切；音檔則依 `AUDIO_RETENTION_DAYS` 分開清。
 
 ### GET /api/jobs/{job_id}/files/{name}
 
@@ -157,7 +157,7 @@ curl -s http://localhost:8071/api/health
 - **總覽**：剩餘點數（直接換算成還能生幾單）、現在在跑什麼、最近完成的幾單附播放器、瀏覽器與登入狀態。有 job 在跑時整頁每 15 秒自動更新
 - **金鑰**：現場發、停用、刪除，看每把用過幾次與最後使用時間。金鑰只存 sha256 雜湊，原文只在剛發出來那一次顯示
 - **測試**：用指定金鑰送一單，頁面每 5 秒自動更新，跑完當場播。走的是跟真實呼叫端完全一樣的參數處理與佇列，所以不會出現「管理台測得過、API 卻不行」的假象。一次扣 10 點
-- **歷史**：近 200 筆 job，含來源金鑰、送出的內容、錯誤碼、耗時，音檔可以直接在頁面上播
+- **歷史**：近 200 筆 job，含來源金鑰、送出的內容、錯誤碼、耗時，音檔可以直接在頁面上播；底下有一顆按鈕可以立刻清掉過期音檔
 
 版面結構跟 [gemini-web](https://github.com/yazelin/gemini-web) 與 codex-image-service 同一家（頂部列、左側邊欄、頁面標題配說明句、卡片），配色刻意不同：深色底配珊瑚橘與洋紅，免得兩個管理台搞混。
 
@@ -180,7 +180,7 @@ curl -s http://localhost:8071/api/health
 | `DEFAULT_TIMEOUT` | 單筆 job 的秒數上限 | `600` |
 | `API_KEYS` | API 金鑰，逗號分隔多把；沒設＝開放 | 無 |
 | `GENERATED_DIR` | 音檔落地目錄 | `~/.suno-web/generated` |
-| `AUDIO_RETENTION_DAYS` | 音檔保留天數，超過的在下次生成時順手清掉 | `14` |
+| `AUDIO_RETENTION_DAYS` | 音檔保留天數，超過的在下次生成時順手清掉，也可以在管理台的歷史頁按鈕手動清 | `14` |
 | `ADMIN_USERNAME` | 管理台帳號 | `admin` |
 | `ADMIN_PASSWORD` | 管理台密碼，**對外開放前一定要改** | `change-me` |
 | `ADMIN_SESSION_SECRET` | 管理台 cookie 的簽章密鑰，**上線前一定要改** | `dev-only-session-secret` |
@@ -244,7 +244,7 @@ uv sync --extra dev
 uv run pytest -q
 ```
 
-61 個測試，另有 1 個標了 `browser` 的測試預設跳過（那個要真的開 Chromium）。瀏覽器層在單元測試裡用假 worker 注入，不碰網路。
+64 個測試，另有 1 個標了 `browser` 的測試預設跳過（那個要真的開 Chromium）。瀏覽器層在單元測試裡用假 worker 注入，不碰網路。
 
 ## 授權
 
