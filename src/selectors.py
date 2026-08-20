@@ -38,13 +38,15 @@ LYRICS_TEXTAREA = '[aria-label="Lyrics editor"]'  # Advanced 分頁「Lyrics」�
 STYLES_INPUT = '[data-testid="create-form-styles-wrapper"] textarea'  # Advanced 分頁「Styles」曲風框
 
 # Advanced 模式歌名框（純 input，無 aria-label、無 data-testid，用 placeholder）。
-# 偵察發現 DOM 上實際有兩份（響應式版面各一份，只有一份可見），用 .first。
-# 重要限制：這個輸入框位在 Advanced 分頁的「More Options」收合區塊裡，
-# 偵察時「More Options」預設是收合的，此時 TITLE_INPUT 是 count=2 但兩份都
-# visibility:hidden、無法 fill()。呼叫端必須先展開「More Options」才能寫入，
-# 這裡沒有現成 selector 給「More Options」（它是純文字 div，無 aria-label/
-# data-testid），Task 10 實作時要另外處理或加一個新 selector。
-TITLE_INPUT = 'input[placeholder="Song Title (Optional)"]'  # Advanced「More Options」內的歌名框
+# DOM 上有兩份（響應式版面各一份）。
+# Task 10 實機重驗更正 Task 9 的假設：問題不是「More Options 收合區塊要展開」——
+# 頁面上確實有個純文字「More Options」div，但實測點擊它前後，兩份 TITLE_INPUT
+# 的可見性完全沒變化，跟這個欄位無關。真正原因是 .first 精準命中了響應式版面
+# 裡隱藏的那份（visible=False，直接 fill() 會 timeout），.last 才是目前版面下
+# 可見可填的那份。已在 production 預設的 1280x720 viewport、以及加大到
+# 1680x1050 兩種情況下都驗證過 .last 可直接 fill() 成功、讀回值一致。
+# 呼叫端請用 .last，不要用 .first。
+TITLE_INPUT = 'input[placeholder="Song Title (Optional)"]'  # Advanced 分頁歌名框（用 .last）
 
 # Simple 模式「純音樂」開關（pill 按鈕，非 <input type=checkbox>）。
 # 重要限制：偵察逐一檢查過 aria-checked / aria-pressed / data-state 三種常見
@@ -57,6 +59,41 @@ TITLE_INPUT = 'input[placeholder="Song Title (Optional)"]'  # Advanced「More Op
 # 內有 Write / Prompt / Instrumental 三個 role=radio 選項，這三個「有」
 # aria-checked，可正常讀狀態，但和這裡的 INSTRUMENTAL_TOGGLE 是不同元素）。
 INSTRUMENTAL_TOGGLE = '[aria-label="Check this to generate an instrumental only song"]'  # Simple 模式「Instrumental」開關
+
+# Advanced 模式「Lyrics mode」radiogroup 裡的 Instrumental 選項（Task 10 實機
+# 驗證，非 Task 9 原本的假設）。radiogroup 本身：
+# [role="radiogroup"][aria-label="Lyrics mode"]，底下三個 role=radio（Write /
+# Prompt / Instrumental）各自沒有 aria-label，只有文字，所以用 Playwright
+# 選擇器擴充語法 :has-text()（非標準 CSS，但 page.locator() 原生支援）精準
+# 命中文字為 "Instrumental" 的那顆。這三個 radio 都有正常 aria-checked，
+# 已實測點選後 aria-checked 會正確變 true/false（不像 INSTRUMENTAL_TOGGLE 讀
+# 不到狀態）。
+# 已知限制：這顆按鈕在 production 預設 1280x720 viewport 下，常被浮動的側欄
+# resize handle（或其他動畫中的元素）蓋住，Playwright 座標式 click() 會被
+# 攔截並必現 timeout（即使 force=True 也可能點到蓋住的元素而沒有真正選取）。
+# src/suno.py 改用 JS `el.click()` 直接觸發 DOM click 事件、不做座標命中測試
+# 繞過遮擋，已在 1280x720 下實測兩個方向（選取/切回 Write）都正確反映在
+# aria-checked。
+#
+# 重要（Task 10 實機踩到的坑）：這個 radiogroup 選到哪個選項會被 Suno 存成
+# 帳號的 create 表單草稿，不是單純的頁面內 state——即使每個 job 開始都
+# `page.goto()` 全新導覽（controller ruling 1），只要帳號上一次是選
+# Instrumental，這次全新頁面的 Lyrics mode 照樣是 Instrumental（實測會導致
+# LYRICS_TEXTAREA 整個從 DOM 消失，count=0，不是「存在但隱藏」）。這點跟
+# INSTRUMENTAL_TOGGLE（Simple 模式）不同：後者實測即使上一個 job 留著開著，
+# 下一次全新頁面還是會重置回關閉。也就是說 ruling 2「新分頁預設一定是 off」
+# 這個假設只對 Simple 模式的 INSTRUMENTAL_TOGGLE 成立，對這裡的 Lyrics mode
+# radiogroup 不成立——custom 模式無論 want_instrumental 是 True 或 False，
+# 都要明確選一次目標選項（用 aria-checked 判斷要不要點，已經對就跳過），
+# 不能只在 True 時才點。
+LYRICS_MODE_INSTRUMENTAL = (
+    '[role="radiogroup"][aria-label="Lyrics mode"] '
+    '[role="radio"]:has-text("Instrumental")'
+)  # Advanced 分頁「純音樂」選項
+LYRICS_MODE_WRITE = (
+    '[role="radiogroup"][aria-label="Lyrics mode"] '
+    '[role="radio"]:has-text("Write")'
+)  # Advanced 分頁「自己寫歌詞」選項（custom+非 instrumental 要明確切回這個）
 
 # Create 按鈕在兩個分頁都存在（同一顆，count=1），aria-label 穩定。
 CREATE_BUTTON = '[aria-label="Create song"]'  # 送出生成的 Create 按鈕
@@ -79,11 +116,19 @@ FEED_URL_SUBSTRINGS: list[str] = ["/api/feed/v3"]  # response.url 含此字串�
 #   https://studio-api-prod.suno.com/api/billing/info/
 # 回應含頂層 "credits": <int> 欄位。
 # 重要：這個帳號是 free tier，"credits" 這個欄位讀到的是「另外購買的點數包」
-# 餘額（此帳號目前是 0），不是免費方案的月配額用量；免費月配額另外在同一份
-# JSON 的 "monthly_usage"/"monthly_limit" 兩個欄位（此帳號偵察當下是 70/100）。
-# extract_credits() 只認 CREDITS_JSON_KEYS 這個 int/float 欄位，所以目前設定
-# 對 free tier 帳號會回報 0，不會反映真正剩餘的月配額；如果之後要顯示免費
-# 方案的剩餘量，需要另外算 monthly_limit - monthly_usage，這裡先誠實留著
-# 只抓 "credits" 這個字面欄位。
+# 餘額（此帳號偵察當下是 0），不是免費方案的月配額用量；免費月配額另外在同一份
+# JSON 的 "monthly_usage"/"monthly_limit" 兩個欄位（此帳號偵察當下是 70/100，
+# 代表本月已用 70、還剩 30）。Task 10 的 extract_credits() 已改成優先算
+# monthly_limit - monthly_usage 當作「真正剩餘量」，只有算不出來時才退回這裡
+# CREDITS_JSON_KEYS 的字面查找——見下方 CREDITS_MONTHLY_USAGE_KEY /
+# CREDITS_MONTHLY_LIMIT_KEY。
 CREDITS_URL_SUBSTRINGS: list[str] = ["/api/billing/info/"]  # 點數/帳單資訊端點
-CREDITS_JSON_KEYS: list[str] = ["credits"]  # 餘額在 JSON 的哪個 key
+CREDITS_JSON_KEYS: list[str] = ["credits"]  # 餘額在 JSON 的哪個 key（字面 fallback，見下）
+
+# 免費方案月配額的兩個欄位。extract_credits() 優先算 monthly_limit - monthly_usage
+# 當作「真正剩餘量」，因為同一份 payload 就有這兩個欄位、算起來零成本，比字面
+# CREDITS_JSON_KEYS（"credits"，對 free tier 帳號恆為 0，見上方說明）更貼近
+# 使用者感受到的「這個月還能生成幾首」。算不出來（缺欄位/型別不對，例如付費
+# 方案可能沒有月配額概念）才退回 CREDITS_JSON_KEYS 字面查找。
+CREDITS_MONTHLY_USAGE_KEY = "monthly_usage"
+CREDITS_MONTHLY_LIMIT_KEY = "monthly_limit"
