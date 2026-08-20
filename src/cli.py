@@ -84,6 +84,21 @@ def _install() -> None:
     sys.exit(1)
 
 
+def login_chrome_args(chrome: str, profile: str, settings) -> list[str]:
+    """登入用的 Chrome 參數。跟 browser.py 保持一致的那兩項：
+
+    - `--password-store=basic`：cookie 用固定金鑰加密，profile 才搬得動
+    - `--no-sandbox`：沙箱起不來的機器（把 deb 解到家目錄、chrome-sandbox
+      沒有 root 的 setuid 位元）非有不可，否則 Chrome 一啟動就中止
+    """
+    args = [chrome, f"--user-data-dir={profile}", "--no-first-run",
+            "--no-default-browser-check", "--password-store=basic"]
+    if settings.chrome_no_sandbox:
+        args.append("--no-sandbox")
+    args.append(settings.suno_url)
+    return args
+
+
 def _login(worker: int = 0) -> None:
     """開一個普通的 Chrome 讓人登入，全程不接 CDP。
 
@@ -117,16 +132,12 @@ def _login(worker: int = 0) -> None:
           "沒有被程式驅動）。")
     print("登完、確認看得到 Create 頁面之後，**把瀏覽器視窗關掉**，這裡就會"
           "自動驗證。不要在這裡按 Ctrl-C，那樣 cookie 可能沒寫回去。")
+    args = login_chrome_args(chrome, str(profile), settings)
     # Chrome 的 stderr 留著：它開不起來時的原因只寫在這裡。
     err_path = profile / "chrome-login-stderr.log"
     started = time.time()
     with err_path.open("w", encoding="utf-8") as err:
-        proc = subprocess.Popen(
-            [chrome, f"--user-data-dir={profile}", "--no-first-run",
-             "--no-default-browser-check",
-             # 跟 browser.py 一致：cookie 用固定金鑰加密，profile 才搬得動
-             "--password-store=basic", settings.suno_url],
-            stdout=subprocess.DEVNULL, stderr=err)
+        proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=err)
         proc.wait()
     if time.time() - started < 5:
         tail = err_path.read_text(encoding="utf-8", errors="replace").strip()

@@ -59,3 +59,22 @@ def test_worker_profile_dir_naming(monkeypatch, tmp_path):
     assert config.get_worker_profile_dir(0) == str(tmp_path / "profiles")
     assert config.get_worker_profile_dir(1) == str(tmp_path / "profiles-1")
     assert config.get_worker_profile_dir(3) == str(tmp_path / "profiles-3")
+
+
+def test_login_chrome_args_follow_the_same_rules_as_the_service():
+    """登入用的 Chrome 要跟服務用的帶同樣兩個關鍵旗標,不然:
+    少了 password-store,profile 搬到別台機器會變未登入;
+    少了 no-sandbox,沙箱沒設好的機器(.11)一啟動就中止。"""
+    from src.cli import login_chrome_args
+
+    class S:
+        chrome_no_sandbox = False
+        suno_url = "https://suno.com/create"
+
+    args = login_chrome_args("/usr/bin/google-chrome", "/tmp/p", S())
+    assert "--password-store=basic" in args
+    assert "--no-sandbox" not in args
+    assert args[-1] == "https://suno.com/create"
+
+    S.chrome_no_sandbox = True
+    assert "--no-sandbox" in login_chrome_args("/usr/bin/google-chrome", "/tmp/p", S())
