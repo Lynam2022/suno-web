@@ -111,7 +111,9 @@ def _login(worker: int = 0) -> None:
           "自動驗證。不要在這裡按 Ctrl-C，那樣 cookie 可能沒寫回去。")
     proc = subprocess.Popen(
         [chrome, f"--user-data-dir={profile}", "--no-first-run",
-         "--no-default-browser-check", settings.suno_url],
+         "--no-default-browser-check",
+         # 跟 browser.py 一致：cookie 用固定金鑰加密，profile 才搬得動
+         "--password-store=basic", settings.suno_url],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     proc.wait()
     print("視窗關掉了，驗證登入態……")

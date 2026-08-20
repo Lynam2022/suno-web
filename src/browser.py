@@ -66,6 +66,12 @@ class BrowserManager:
             "--no-first-run",
             "--no-default-browser-check",
             "--lang=zh-TW",
+            # cookie 用固定金鑰加密，不要走系統鑰匙圈。桌機有 gnome-keyring
+            # 時 Chrome 會用鑰匙圈的金鑰，那份 profile 複製到別台機器就解不開
+            # cookie，登入態等於消失（實測把 profile 送到 .11 就變成未登入）。
+            # Playwright 啟動瀏覽器時本來就帶這個旗標，我們自己接手啟動之後
+            # 要記得補回來。
+            "--password-store=basic",
         ]
         if self._headless:
             args.append("--headless=new")

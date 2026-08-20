@@ -33,3 +33,14 @@ async def test_real_launch_and_navigate(tmp_path):
     finally:
         await bm.stop()
     assert bm.is_alive() is False
+
+
+def test_launch_args_keep_cookies_portable():
+    """--password-store=basic 不能掉:少了它,桌機的 Chrome 會用系統鑰匙圈
+    加密 cookie,profile 複製到別台機器就解不開,登入態等於消失。"""
+    import inspect
+
+    from src import browser as browser_module
+
+    src = inspect.getsource(browser_module.BrowserManager.start)
+    assert "--password-store=basic" in src
