@@ -154,30 +154,24 @@ async def _verify_login(worker: int) -> None:
 def _serve() -> None:
     import uvicorn
 
-    from .browser import BrowserManager
     from .config import settings
     from .jobs import JobQueue, JobStore
     from .main import create_app
-    from .suno import SunoRunner
+    from .worker_pool import WorkerPool
 
-    browser = BrowserManager()
-    runner = SunoRunner(browser, settings)
+    pool = WorkerPool(settings)
     store = JobStore(str(Path(settings.data_dir) / "jobs.db"))
     queue = JobQueue(
-        store, runner.run,
+        store, pool.runners,
         max_size=settings.queue_max_size,
         default_timeout=settings.default_timeout,
         generated_dir=settings.generated_dir,
         retention_days=settings.audio_retention_days,
     )
-    app = create_app(
-        settings=settings, store=store, queue=queue, browser=browser,
-        health_extra=lambda: {
-            "browser_alive": browser.is_alive(),
-            "logged_in": runner.logged_in,
-            "credits": runner.last_credits,
-        },
-    )
+    app = create_app(settings=settings, store=store, queue=queue, pool=pool,
+                     health_extra=pool.summary)
+    print(f"帳號數（WORKER_COUNT）：{pool.settings.worker_count}"
+          f"，瀏覽器隨用隨開，閒置 {settings.idle_shutdown_minutes} 分鐘關閉")
     uvicorn.run(app, host=settings.host, port=settings.port)
 
 

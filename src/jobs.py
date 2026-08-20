@@ -185,32 +185,70 @@ Runner = Callable[["Job"], Awaitable[list[Clip]]]
 
 
 class JobQueue:
-    """單 worker：一次跑一單，其餘排隊。"""
+    """一個 worker 一條佇列，同一個 worker 內序列處理。
 
-    def __init__(self, store: JobStore, runner: Runner, *,
+    每個 worker 綁一個 Suno 帳號。派工用輪流（round-robin）而不是「誰有空
+    給誰」：多帳號的目的就是把每月配額攤平，永遠優先給第一個帳號等於白做。
+    輪到的那個正忙就順延給下一個閒著的，都在忙才排進最短的那條佇列。
+
+    同一個帳號不能同時跑兩單：一個 worker 只有一個瀏覽器分頁，而輪詢期間
+    會定期 reload 它，兩單並行會互相把頁面導覽掉。
+    """
+
+    def __init__(self, store: JobStore, runner: Runner | list[Runner], *,
                  max_size: int, default_timeout: int,
                  generated_dir: str, retention_days: int) -> None:
         self._store = store
-        self._runner = runner
-        self._queue: asyncio.Queue[str] = asyncio.Queue(maxsize=max_size)
+        self._runners: list[Runner] = (list(runner) if isinstance(runner, list)
+                                       else [runner])
+        n = len(self._runners)
+        # max_size 是整體上限，平均分給每條佇列（至少 1）
+        per_queue = max(1, max_size // n)
+        self._queues: list[asyncio.Queue[str]] = [
+            asyncio.Queue(maxsize=per_queue) for _ in range(n)]
+        self._busy = [False] * n
+        self._rr = 0
         self._default_timeout = default_timeout
         self._generated_dir = generated_dir
         self._retention_days = retention_days
 
     @property
+    def worker_count(self) -> int:
+        return len(self._runners)
+
+    @property
     def queue_size(self) -> int:
-        return self._queue.qsize()
+        return sum(q.qsize() for q in self._queues)
+
+    def _pick(self) -> int:
+        """輪流挑一個 worker：優先閒著的，都在忙就挑佇列最短的。"""
+        n = len(self._queues)
+        for offset in range(n):
+            idx = (self._rr + offset) % n
+            if not self._busy[idx] and not self._queues[idx].full():
+                self._rr = (idx + 1) % n
+                return idx
+        idx = min(range(n), key=lambda i: self._queues[i].qsize())
+        self._rr = (idx + 1) % n
+        return idx
 
     def submit(self, params: dict) -> Job:
-        if self._queue.full():
+        if all(q.full() for q in self._queues):
             raise QueueFullError()
+        idx = self._pick()
+        if self._queues[idx].full():
+            raise QueueFullError()
+        params = dict(params, worker=idx)
         job = self._store.create(params)
-        self._queue.put_nowait(job.id)
+        self._queues[idx].put_nowait(job.id)
         return job
 
-    async def worker_loop(self) -> None:
+    async def worker_loop(self, index: int = 0) -> None:
+        queue = self._queues[index]
+        runner = self._runners[index]
         while True:
-            job_id = await self._queue.get()
+            job_id = await queue.get()
+            self._busy[index] = True
             job: Job | None = None
             try:
                 job = self._store.get(job_id)
@@ -222,7 +260,7 @@ class JobQueue:
                 cleanup_expired(self._generated_dir, self._retention_days)
                 timeout = int(job.params.get("timeout") or self._default_timeout)
                 try:
-                    clips = await asyncio.wait_for(self._runner(job), timeout=timeout)
+                    clips = await asyncio.wait_for(runner(job), timeout=timeout)
                     job.clips = clips
                     if not any(c.downloadable for c in clips):
                         raise GenerationError("download_failed", "一首可下載的都沒有")

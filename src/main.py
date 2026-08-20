@@ -57,7 +57,7 @@ def build_params(req: GenerateRequest, default_timeout: int) -> dict[str, Any]:
 
 
 def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
-               browser: Any = None,
+               browser: Any = None, pool: Any = None,
                health_extra: Callable[[], dict[str, Any]] | None = None) -> FastAPI:
     started_at = time.time()
 
@@ -69,11 +69,19 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
         store.fail_unfinished("服務重啟，重啟前未完成的 job 一律作廢")
         if browser is not None:
             await browser.start()
-        worker = asyncio.create_task(queue.worker_loop())
+        # 一個帳號一條 worker_loop；瀏覽器由 pool 隨用隨開，這裡不預先啟動。
+        tasks = [asyncio.create_task(queue.worker_loop(i))
+                 for i in range(queue.worker_count)]
+        if pool is not None:
+            tasks.append(asyncio.create_task(pool.idle_sweeper()))
         yield
-        worker.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await worker
+        for t in tasks:
+            t.cancel()
+        for t in tasks:
+            with contextlib.suppress(asyncio.CancelledError):
+                await t
+        if pool is not None:
+            await pool.stop_all()
         if browser is not None:
             await browser.stop()
 

@@ -282,6 +282,19 @@ def create_admin_router(*, settings: Settings, store: JobStore,
                        f'<p class="hint"><a class="link" href="{url("/admin/history")}">'
                        f'看完整歷史 →</a></p>{latest}</div>' if latest else "")
 
+        # 多帳號時列出每個帳號：配額攤得平不平、哪個帳號快用完，一眼看到
+        workers = info.get("workers") or []
+        worker_card = ""
+        if len(workers) > 1:
+            wrows = "".join(_worker_row(w) for w in workers)
+            worker_card = (
+                '<div class="card"><h2>帳號</h2>'
+                '<p class="hint">派工輪流，把每月配額攤在各帳號上。'
+                '瀏覽器隨用隨開，閒置會自動休眠省記憶體。</p>'
+                '<table><tr><th>#</th><th>狀態</th><th>剩餘點數</th>'
+                '<th>成功</th><th>失敗</th><th>最後使用</th></tr>'
+                f'{wrows}</table></div>')
+
         keys = admin_db.list_api_keys()
         state_card = f"""<div class="card"><h2>服務狀態</h2><table>
 <tr><th>項目</th><th>狀態</th></tr>
@@ -294,7 +307,7 @@ def create_admin_router(*, settings: Settings, store: JobStore,
         return _page(title="總覽", active="overview", user=user,
                      refresh=15 if running else 0,
                      subtitle="還能生幾單、現在在跑什麼、最近幾單聽起來如何。",
-                     body=stats + now_card + listen_card + state_card)
+                     body=stats + now_card + worker_card + listen_card + state_card)
 
     # ---- 金鑰 ----
 
@@ -450,6 +463,21 @@ def create_admin_router(*, settings: Settings, store: JobStore,
                                 status_code=303)
 
     return router
+
+
+def _worker_row(w: dict) -> str:
+    state = "執行中" if w["busy"] else ("待命" if w["browser_up"] else "已休眠")
+    cls = "ok" if w["browser_up"] else "run"
+    credits = w["credits"]
+    if isinstance(credits, int):
+        credit_txt = f"{credits}（{credits // 10} 單）"
+    else:
+        credit_txt = '<span class="muted">未觀測</span>'
+    return (f'<tr><td>{w["id"]}</td>'
+            f'<td><span class="pill {cls}">{state}</span></td>'
+            f'<td>{credit_txt}</td><td>{w["jobs_done"]}</td>'
+            f'<td>{w["jobs_failed"]}</td>'
+            f'<td class="muted">{_fmt_epoch(w["last_used"])}</td></tr>')
 
 
 def _pill(status: str) -> str:

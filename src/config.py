@@ -42,6 +42,13 @@ class Settings:
         # 少一層隔離，所以不當預設。
         self.chrome_no_sandbox: bool = _bool(os.getenv("CHROME_NO_SANDBOX"), False)
 
+        # 多帳號：一個 worker 綁一個 Suno 帳號（一個 profile 目錄）
+        self.worker_count: int = _int(os.getenv("WORKER_COUNT"), 1)
+        # 瀏覽器閒置這麼久就關掉。這服務量小、閒置時間長，常駐四個 Chrome
+        # 要吃掉近 5 GB；隨用隨開只多花約 10 到 15 秒，相對 2 到 4 分鐘的
+        # 生成可以忽略。設 0 表示永不關閉。
+        self.idle_shutdown_minutes: int = _int(os.getenv("IDLE_SHUTDOWN_MINUTES"), 10)
+
         # 服務
         self.host: str = os.getenv("HOST", "0.0.0.0")
         self.port: int = _int(os.getenv("PORT"), 8071)

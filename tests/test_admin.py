@@ -177,3 +177,46 @@ def test_manual_cleanup_reports_how_many_it_deleted(client, tmp_path, monkeypatc
     assert "swept=1" in r.headers["location"]
     assert not old.exists() and fresh.exists()
     assert "已清掉 1 個過期的 job 目錄" in client.get("/admin/history?swept=1").text
+
+
+def test_overview_lists_each_account_when_multi_worker(tmp_path, monkeypatch):
+    """多帳號時總覽要列出每個帳號的點數與用量;單帳號時不顯示那張表。"""
+    monkeypatch.setenv("API_KEYS", "")
+    monkeypatch.setenv("ADMIN_PASSWORD", "secret123")
+    monkeypatch.setenv("ADMIN_SESSION_SECRET", "s")
+    monkeypatch.setenv("ADMIN_DB_PATH", str(tmp_path / "a.db"))
+    monkeypatch.setenv("GENERATED_DIR", str(tmp_path / "g"))
+    settings = Settings()
+    monkeypatch.setattr("src.admin_db.settings", settings)
+    admin_db.reset_for_tests()
+
+    async def runner(job):
+        return [Clip(id="c", status="complete", downloadable=True,
+                     filename="c.mp3")]
+
+    store = JobStore(str(tmp_path / "j.db"))
+    queue = JobQueue(store, [runner, runner], max_size=10, default_timeout=5,
+                     generated_dir=settings.generated_dir, retention_days=14)
+    app = create_app(settings=settings, store=store, queue=queue,
+                     health_extra=lambda: {
+                         "browser_alive": True, "logged_in": True,
+                         "credits": 400,
+                         "workers": [
+                             {"id": 0, "profile": "p", "browser_up": True,
+                              "busy": False, "logged_in": True, "credits": 300,
+                              "jobs_done": 2, "jobs_failed": 0,
+                              "last_used": 1_700_000_000.0},
+                             {"id": 1, "profile": "p1", "browser_up": False,
+                              "busy": False, "logged_in": None, "credits": 100,
+                              "jobs_done": 0, "jobs_failed": 0,
+                              "last_used": None},
+                         ]})
+    with TestClient(app) as c:
+        c.post("/admin/login", data={"username": "admin", "password": "secret123"},
+               follow_redirects=False)
+        body = c.get("/admin").text
+
+    assert "帳號" in body
+    assert "300（30 單）" in body and "100（10 單）" in body
+    assert "已休眠" in body   # worker 1 的瀏覽器沒起來
+    admin_db.reset_for_tests()
