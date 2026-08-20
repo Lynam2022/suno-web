@@ -63,7 +63,7 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
     async def lifespan(app: FastAPI):
         # 服務重啟前卡在 queued/generating 的 job 永遠不會再被排到（queue 是
         # 純記憶體佇列），不作廢的話 client 會永遠輪詢不到終態。
-        store.fail_unfinished("服務重啟,重啟前未完成的 job 一律作廢")
+        store.fail_unfinished("服務重啟，重啟前未完成的 job 一律作廢")
         if browser is not None:
             await browser.start()
         worker = asyncio.create_task(queue.worker_loop())
