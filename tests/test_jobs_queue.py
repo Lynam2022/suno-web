@@ -109,3 +109,27 @@ def test_cleanup_expired(tmp_path):
     cleanup_expired(str(root), 14)
     assert not old.exists()
     assert new.exists()
+
+
+async def test_worker_survives_bad_timeout_param(tmp_path):
+    """Regression: bad timeout param should not kill worker loop."""
+    async def runner(job):
+        return [Clip(id="c1", status="complete", downloadable=True, filename="c1.mp3")]
+
+    store, queue = make_queue(tmp_path, runner)
+
+    # Submit job with invalid timeout (list instead of int) — this will raise ValueError
+    bad_job = queue.submit({"timeout": ["bogus"]})
+    bad_done = await run_until_finished(store, queue, bad_job.id, seconds=3.0)
+
+    # Bad job should end in error, not stuck in generating
+    assert bad_done.status == "error"
+    assert bad_done.error == "browser_error"
+
+    # Now submit a good job — worker must survive and process it
+    good_job = queue.submit({"mode": "simple"})
+    good_done = await run_until_finished(store, queue, good_job.id, seconds=3.0)
+
+    # Good job should complete successfully
+    assert good_done.status == "done"
+    assert good_done.clips[0].filename == "c1.mp3"

@@ -165,30 +165,40 @@ class JobQueue:
             job = self._store.get(job_id)
             if job is None:
                 continue
-            job.status = "generating"
-            job.started_at = time.time()
-            self._store.save(job)
-            cleanup_expired(self._generated_dir, self._retention_days)
-            timeout = int(job.params.get("timeout") or self._default_timeout)
             try:
-                clips = await asyncio.wait_for(self._runner(job), timeout=timeout)
-                job.clips = clips
-                if not any(c.downloadable for c in clips):
-                    raise GenerationError("download_failed", "一首可下載的都沒有")
-                job.status = "done"
-            except GenerationError as e:
-                job.status = "error"
-                job.error = e.code
-                job.error_message = e.message or None
-            except asyncio.TimeoutError:
-                job.status = "error"
-                job.error = "generation_timeout"
-            except Exception as e:  # 意料外的一律歸 browser_error
+                job.status = "generating"
+                job.started_at = time.time()
+                self._store.save(job)
+                cleanup_expired(self._generated_dir, self._retention_days)
+                timeout = int(job.params.get("timeout") or self._default_timeout)
+                try:
+                    clips = await asyncio.wait_for(self._runner(job), timeout=timeout)
+                    job.clips = clips
+                    if not any(c.downloadable for c in clips):
+                        raise GenerationError("download_failed", "一首可下載的都沒有")
+                    job.status = "done"
+                except GenerationError as e:
+                    job.status = "error"
+                    job.error = e.code
+                    job.error_message = e.message or None
+                except asyncio.TimeoutError:
+                    job.status = "error"
+                    job.error = "generation_timeout"
+                except Exception as e:  # 意料外的一律歸 browser_error
+                    job.status = "error"
+                    job.error = "browser_error"
+                    job.error_message = str(e)[:500]
+                job.finished_at = time.time()
+                self._store.save(job)
+            except Exception as e:
                 job.status = "error"
                 job.error = "browser_error"
                 job.error_message = str(e)[:500]
-            job.finished_at = time.time()
-            self._store.save(job)
+                job.finished_at = time.time()
+                try:
+                    self._store.save(job)
+                except Exception:
+                    pass
 
 
 def cleanup_expired(generated_dir: str, retention_days: int) -> None:
