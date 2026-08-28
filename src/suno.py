@@ -297,10 +297,24 @@ class SunoRunner:
             pass
 
     async def _click_create(self, page: Page) -> None:
-        try:
-            await page.locator(selectors.CREATE_BUTTON).first.click()
-        except Exception as e:
-            raise GenerationError("submit_failed", f"Không nhấn được nút Create: {e}") from e
+        candidates = [
+            selectors.CREATE_BUTTON,
+            '[aria-label="Create"]',
+            'button:has-text("Create")',
+            'button[type="submit"]',
+        ]
+        for sel in candidates:
+            btn = page.locator(sel).first
+            if await btn.count() > 0:
+                try:
+                    await btn.click(timeout=3000)
+                    return
+                except Exception:
+                    handle = await btn.element_handle()
+                    if handle:
+                        await page.evaluate("el => el.click()", handle)
+                        return
+        raise GenerationError("submit_failed", "Không nhấn được nút Create (Không tìm thấy nút Create trên trang Suno)")
 
     def _is_freshly_created(self, clip_id: str, before: set[str],
                             submit_time: float) -> bool:
