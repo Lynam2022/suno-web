@@ -18,10 +18,8 @@ from .tagging import tag_mp3
 
 TERMINAL_STATUSES = {"complete", "error"}
 _MAX_TRACKED_CLIPS = 500
-# 判斷 clip 是不是這次 job 才產生的容錯窗口（秒）：我方送出 Create 的時間點
-# 跟 Suno 伺服器記的 created_at 之間可能有幾秒鐘的時鐘差 / 網路延遲，抓寬鬆一點
-# 避免真正剛生成的 clip 因為差個一兩秒被誤判成「舊的」而漏掉。
-_CLOCK_SKEW_TOLERANCE = 15.0
+# 判斷 clip 是不是這次 job 才產生的容錯窗口（秒）
+_CLOCK_SKEW_TOLERANCE = 180.0
 
 
 @dataclass
@@ -333,7 +331,7 @@ class SunoRunner:
         return clip_id not in before
 
     async def _wait_new_ids(self, before: set[str], submit_time: float,
-                            timeout: float = 90.0) -> set[str]:
+                            timeout: float = 150.0) -> set[str]:
         deadline = time.time() + timeout
         while time.time() < deadline:
             new = {cid for cid in self._clips
