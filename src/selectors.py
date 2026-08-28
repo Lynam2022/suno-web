@@ -110,7 +110,7 @@ LOGGED_OUT_MARKER = "text=Sign in"  # 只有未登入時才會出現的「Sign i
 #   https://studio-api-prod.suno.com/api/feed/v3
 # 回應格式：{"clips": [...], "next_cursor": ..., "has_more": bool}，
 # 每個 clip 物件含 id/status/title/audio_url/image_url/metadata.duration 等欄位。
-FEED_URL_SUBSTRINGS: list[str] = ["/api/feed/v3"]  # response.url 含此字串即 clip feed
+FEED_URL_SUBSTRINGS: list[str] = ["/api/feed"]  # response.url 含此字串即 clip feed
 
 # 偵察時側錄到的點數/方案資訊端點：
 #   https://studio-api-prod.suno.com/api/billing/info/
