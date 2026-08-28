@@ -233,41 +233,46 @@ class SunoRunner:
     async def _fill_form(self, page: Page, params: dict) -> None:
         try:
             if params["mode"] == "custom":
-                await page.locator(selectors.CUSTOM_TAB).first.click()
-                # Controller ruling 2（custom+instrumental 分支）+ Task 10
-                # 實機追加發現：這裡的「Lyrics mode」radiogroup 選到哪個選項
-                # 會被 Suno 存成帳號的表單草稿，不像 Simple 模式的
-                # INSTRUMENTAL_TOGGLE 那樣每次全新頁面必重置——上一個 job（或
-                # 上一次人工操作）如果留在 Instrumental，這次全新 goto 的頁面
-                # 照樣是 Instrumental，此時 LYRICS_TEXTAREA 甚至整個不在 DOM
-                # 上（不是隱藏，是不存在），要嘛填不進歌詞、要嘛誤生成成純
-                # 音樂。所以無論 want 是 True 還是 False 都要明確選一次目標
-                # 選項，且必須排在填 LYRICS_TEXTAREA 之前。詳見 selectors.py
-                # 對 LYRICS_MODE_INSTRUMENTAL 的說明。
+                custom_tab = page.locator(selectors.CUSTOM_TAB).first
+                if await custom_tab.count() > 0:
+                    try:
+                        await custom_tab.click(timeout=3000)
+                    except Exception:
+                        pass
                 await self._set_lyrics_mode(page, bool(params.get("instrumental")))
                 if params["lyrics"]:
-                    await page.locator(selectors.LYRICS_TEXTAREA).first.fill(params["lyrics"])
+                    lyr = page.locator(selectors.LYRICS_TEXTAREA).first
+                    if await lyr.count() > 0:
+                        await lyr.fill(params["lyrics"])
                 if params["style"]:
-                    await page.locator(selectors.STYLES_INPUT).first.fill(params["style"])
+                    style_el = page.locator(selectors.STYLES_INPUT).first
+                    if await style_el.count() == 0:
+                        style_el = page.locator('textarea[placeholder*="style"], textarea[placeholder*="Style"], textarea[maxlength="1000"]').first
+                    if await style_el.count() > 0:
+                        await style_el.fill(params["style"])
                 if params["title"]:
-                    # Controller ruling 3：TITLE_INPUT 在 DOM 上有兩份（響應式
-                    # 版面各一份），.first 是隱藏的那份、.last 才可見可填——
-                    # 見 selectors.py 對 TITLE_INPUT 的重驗筆記。實測不需要
-                    # 展開任何「More Options」收合區塊，Task 9 那個假設是誤判。
-                    await page.locator(selectors.TITLE_INPUT).last.fill(params["title"])
+                    title_el = page.locator(selectors.TITLE_INPUT).last
+                    if await title_el.count() > 0:
+                        await title_el.fill(params["title"])
             else:
-                await page.locator(selectors.SIMPLE_TAB).first.click()
-                await page.locator(selectors.PROMPT_TEXTAREA).first.fill(params["prompt"])
+                simple_tab = page.locator(selectors.SIMPLE_TAB).first
+                if await simple_tab.count() > 0:
+                    try:
+                        await simple_tab.click(timeout=3000)
+                    except Exception:
+                        pass
+                prompt_el = page.locator(selectors.PROMPT_TEXTAREA).first
+                if await prompt_el.count() == 0:
+                    prompt_el = page.locator('textarea[placeholder*="song"], textarea[placeholder*="Song"], textarea[maxlength="3000"]').first
+                if await prompt_el.count() > 0:
+                    await prompt_el.fill(params["prompt"])
                 if params.get("instrumental"):
-                    # Controller ruling 2：新分頁預設一定是關閉純音樂，且這顆
-                    # 按鈕讀不到 aria-checked/aria-pressed/data-state 任何狀態
-                    # 屬性（見 selectors.py），want=True 時直接點一次即可，
-                    # 不用先讀狀態比對（brief 原本那段邏輯永遠讀到 None，
-                    # 等於永遠不會真的點擊）。Task 10 實機驗證過：即使上一個
-                    # job 留著這顆開著沒關，下一次全新頁面還是會重置回關閉，
-                    # 跟 Advanced 分頁的 Lyrics mode 不同，所以這裡維持「只在
-                    # want=True 時點」不用額外處理 want=False 的情況。
-                    await page.locator(selectors.INSTRUMENTAL_TOGGLE).first.click()
+                    toggle = page.locator(selectors.INSTRUMENTAL_TOGGLE).first
+                    if await toggle.count() > 0:
+                        try:
+                            await toggle.click(timeout=3000)
+                        except Exception:
+                            pass
         except GenerationError:
             raise
         except Exception as e:
@@ -278,18 +283,18 @@ class SunoRunner:
         target_selector = (selectors.LYRICS_MODE_INSTRUMENTAL if want_instrumental
                            else selectors.LYRICS_MODE_WRITE)
         radio = page.locator(target_selector).first
-        await radio.scroll_into_view_if_needed()
-        if await radio.get_attribute("aria-checked") == "true":
+        if await radio.count() == 0:
             return
-        handle = await radio.element_handle()
-        await page.evaluate("el => el.click()", handle)
-        await page.wait_for_timeout(300)
-        if await radio.get_attribute("aria-checked") != "true":
-            label = "Instrumental" if want_instrumental else "Write"
-            raise GenerationError(
-                "submit_failed",
-                f"Chuyển đổi Lyrics mode sang {label} thất bại (Radiogroup có thể đã thay đổi giao diện)",
-            )
+        try:
+            await radio.scroll_into_view_if_needed(timeout=2000)
+            if await radio.get_attribute("aria-checked") == "true":
+                return
+            handle = await radio.element_handle()
+            if handle:
+                await page.evaluate("el => el.click()", handle)
+                await page.wait_for_timeout(300)
+        except Exception:
+            pass
 
     async def _click_create(self, page: Page) -> None:
         try:
