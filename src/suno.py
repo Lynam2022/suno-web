@@ -105,7 +105,10 @@ def _parse_epoch(created_at: str | None) -> float | None:
     if not isinstance(created_at, str) or not created_at:
         return None
     try:
-        return datetime.fromisoformat(created_at.replace("Z", "+00:00")).timestamp()
+        dt_str = created_at.replace("Z", "+00:00")
+        if "+" not in dt_str and "-" not in dt_str[10:]:
+            dt_str += "+00:00"
+        return datetime.fromisoformat(dt_str).timestamp()
     except ValueError:
         return None
 
