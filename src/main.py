@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 from .config import Settings
@@ -83,6 +83,10 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
             await browser.stop()
 
     app = FastAPI(lifespan=lifespan)
+
+    @app.get("/")
+    async def root():
+        return RedirectResponse(url=f"{settings.admin_url_prefix}/admin", status_code=307)
 
     def require_key(request: Request) -> str | None:
         provided = request.headers.get("x-api-key")
