@@ -42,18 +42,22 @@ def parse_feed_payload(payload: Any) -> list[RawClip]:
 
     def walk(node: Any) -> None:
         if isinstance(node, dict):
-            if isinstance(node.get("id"), str) and isinstance(node.get("status"), str):
+            cid = node.get("id") or node.get("clip_id")
+            st = node.get("status") or node.get("state")
+            if isinstance(cid, str) and cid:
+                if not isinstance(st, str):
+                    st = "submitted"
                 meta = node.get("metadata")
                 duration = node.get("duration")
                 if duration is None and isinstance(meta, dict):
                     duration = meta.get("duration")
-                created_at = node.get("created_at")
+                created_at = node.get("created_at") or node.get("created_at_utc")
                 if not created_at and isinstance(meta, dict):
-                    created_at = meta.get("created_at")
-                found[node["id"]] = RawClip(
-                    id=node["id"],
-                    title=node.get("title") or "",
-                    status=node["status"],
+                    created_at = meta.get("created_at") or meta.get("created_at_utc")
+                found[cid] = RawClip(
+                    id=cid,
+                    title=str(node.get("title") or ""),
+                    status=str(st),
                     duration=float(duration) if duration else None,
                     audio_url=node.get("audio_url") or None,
                     image_url=node.get("image_url") or None,
