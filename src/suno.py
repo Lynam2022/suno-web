@@ -170,16 +170,14 @@ class SunoRunner:
                 body = {}
             if isinstance(body, dict) and "required" in body:
                 self.captcha_required = bool(body["required"])
-        is_feed = any(s in url for s in selectors.FEED_URL_SUBSTRINGS)
         is_credits = any(s in url for s in selectors.CREDITS_URL_SUBSTRINGS)
-        if not (is_feed or is_credits):
-            return
         try:
             payload = await response.json()
         except Exception:
             return
-        if is_feed:
-            for rc in parse_feed_payload(payload):
+        found_clips = parse_feed_payload(payload)
+        if found_clips:
+            for rc in found_clips:
                 self._clips[rc.id] = rc
             while len(self._clips) > _MAX_TRACKED_CLIPS:
                 self._clips.pop(next(iter(self._clips)))
