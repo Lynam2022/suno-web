@@ -170,6 +170,7 @@ class SunoRunner:
         self._sniffing = True
 
     async def _on_response(self, response) -> None:
+        import sys
         url = response.url
         if "/api/c/check" in url:
             try:
@@ -179,16 +180,26 @@ class SunoRunner:
             if isinstance(body, dict) and "required" in body:
                 self.captcha_required = bool(body["required"])
         is_credits = any(s in url for s in selectors.CREDITS_URL_SUBSTRINGS)
+        # Only parse clip data from actual Suno API responses, not 3rd party JS.
+        # Without this filter, auth.suno.com / cdn.cookielaw.org / PostHog etc.
+        # all produce hundreds of false clip entries (id exists but no audio_url
+        # and created_at=None), filling `before` and making freshness check impossible.
+        is_suno_api = ("studio-api-prod.suno.com" in url or
+                       "suno.com/api" in url or
+                       any(s in url for s in selectors.FEED_URL_SUBSTRINGS))
         try:
             payload = await response.json()
         except Exception:
             return
-        found_clips = parse_feed_payload(payload)
-        if found_clips:
-            for rc in found_clips:
-                self._clips[rc.id] = rc
-            while len(self._clips) > _MAX_TRACKED_CLIPS:
-                self._clips.pop(next(iter(self._clips)))
+        if is_suno_api:
+            found_clips = parse_feed_payload(payload)
+            if found_clips:
+                for rc in found_clips:
+                    self._clips[rc.id] = rc
+                print(f"[SNIFFER] {url} -> {len(found_clips)} clips (created_at sample: {found_clips[0].created_at})",
+                      file=sys.stderr, flush=True)
+                while len(self._clips) > _MAX_TRACKED_CLIPS:
+                    self._clips.pop(next(iter(self._clips)))
         if is_credits:
             credits = extract_credits(payload)
             if credits is not None:
@@ -342,22 +353,48 @@ class SunoRunner:
 
     async def _wait_new_ids(self, before: set[str], submit_time: float,
                             timeout: float = 150.0, page: Page | None = None) -> set[str]:
+        import sys
         deadline = time.time() + timeout
         last_reload = time.time()
+        iter_count = 0
         while time.time() < deadline:
+            iter_count += 1
             new = {cid for cid in self._clips
                    if self._is_freshly_created(cid, before, submit_time)}
+            if iter_count % 10 == 1:
+                elapsed = time.time() - (deadline - timeout)
+                print(f"[WAIT_IDS] iter={iter_count} clips_total={len(self._clips)} before={len(before)} new={len(new)} elapsed={elapsed:.0f}s",
+                      file=sys.stderr, flush=True)
+                # Print freshness details for a few recent clips
+                for cid in list(self._clips.keys())[-3:]:
+                    rc = self._clips[cid]
+                    import time as _t
+                    from datetime import datetime, timezone
+                    ca = rc.created_at
+                    epoch = _parse_epoch(ca)
+                    fresh = self._is_freshly_created(cid, before, submit_time)
+                    print(f"  clip id={cid[:8]} status={rc.status} created_at={ca} epoch={epoch} fresh={fresh}",
+                          file=sys.stderr, flush=True)
             if new:
                 await asyncio.sleep(3)
                 return {cid for cid in self._clips
                         if self._is_freshly_created(cid, before, submit_time)}
             if page is not None and time.time() - last_reload >= 15.0:
                 last_reload = time.time()
+                print(f"[WAIT_IDS] Reloading page to force feed refresh (clips={len(self._clips)})",
+                      file=sys.stderr, flush=True)
                 try:
                     await page.reload(wait_until="domcontentloaded")
                 except Exception:
                     pass
             await asyncio.sleep(1.0)
+        print(f"[WAIT_IDS] TIMEOUT clips_total={len(self._clips)} before={len(before)} submitted={self.generate_submitted}",
+              file=sys.stderr, flush=True)
+        for cid in list(self._clips.keys())[-5:]:
+            rc = self._clips[cid]
+            epoch = _parse_epoch(rc.created_at)
+            print(f"  [TIMEOUT clip] id={cid} status={rc.status} created_at={rc.created_at} epoch={epoch} in_before={cid in before}",
+                  file=sys.stderr, flush=True)
         if self.generate_submitted:
             raise GenerationError(
                 "submit_failed",
