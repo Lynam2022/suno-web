@@ -224,7 +224,7 @@ class SunoRunner:
         await page.wait_for_timeout(3000)
         if await page.locator(selectors.LOGGED_OUT_MARKER).count() > 0:
             self.logged_in = False
-            raise GenerationError("not_logged_in", "Suno 未登入，請先跑 suno-web login")
+            raise GenerationError("not_logged_in", "Suno chưa đăng nhập, vui lòng chạy 'suno-web login' trước.")
         self.logged_in = True
 
     async def _fill_form(self, page: Page, params: dict) -> None:
@@ -269,17 +269,9 @@ class SunoRunner:
             raise
         except Exception as e:
             raise GenerationError("submit_failed",
-                                  f"表單操作失敗（selector 可能過期）: {e}") from e
+                                  f"Thao tác trên biểu mẫu thất bại (Selector có thể đã quá hạn): {e}") from e
 
     async def _set_lyrics_mode(self, page: Page, want_instrumental: bool) -> None:
-        """明確把 Advanced/Custom 模式的「Lyrics mode」radiogroup 切到目標選項
-        （Instrumental 或 Write），不管目前（可能是上個 job 或人工操作留下的）
-        狀態是什麼。這個 radiogroup 有正常 aria-checked，先讀狀態、已經對就
-        跳過不點。實際點擊用 JS el.click() 直接觸發 DOM click 事件、不做座標
-        命中測試——這顆按鈕在 production 預設 1280x720 viewport 下常被浮動的
-        側欄 resize handle 蓋住，Playwright 座標式 click()（含 force=True）
-        實測會被攔截、或點到蓋住的元素而沒有真正選取。已實機驗證兩個方向
-        （選取 Instrumental / 切回 Write）都能正確反映在 aria-checked。"""
         target_selector = (selectors.LYRICS_MODE_INSTRUMENTAL if want_instrumental
                            else selectors.LYRICS_MODE_WRITE)
         radio = page.locator(target_selector).first
@@ -293,21 +285,17 @@ class SunoRunner:
             label = "Instrumental" if want_instrumental else "Write"
             raise GenerationError(
                 "submit_failed",
-                f"切換 Lyrics mode 到 {label} 失敗（radiogroup 可能改版）",
+                f"Chuyển đổi Lyrics mode sang {label} thất bại (Radiogroup có thể đã thay đổi giao diện)",
             )
 
     async def _click_create(self, page: Page) -> None:
         try:
             await page.locator(selectors.CREATE_BUTTON).first.click()
         except Exception as e:
-            raise GenerationError("submit_failed", f"按不到 Create: {e}") from e
+            raise GenerationError("submit_failed", f"Không nhấn được nút Create: {e}") from e
 
     def _is_freshly_created(self, clip_id: str, before: set[str],
                             submit_time: float) -> bool:
-        """判斷一個目前追蹤到的 clip 是不是這次 job 才生出來的。優先看
-        created_at（伺服器時間，不受「before 快照抓得早不早」影響，見 run()
-        說明）；created_at 缺漏或解析失敗（理論上不該發生，但欄位畢竟來自
-        對方，防禦一下）才退回舊邏輯：不在 before 快照裡就當新的。"""
         rc = self._clips.get(clip_id)
         if rc is None:
             return False
@@ -323,29 +311,24 @@ class SunoRunner:
             new = {cid for cid in self._clips
                    if self._is_freshly_created(cid, before, submit_time)}
             if new:
-                await asyncio.sleep(3)  # 同單 clip 幾乎同時出現，多等一拍收齊
+                await asyncio.sleep(3)
                 return {cid for cid in self._clips
                         if self._is_freshly_created(cid, before, submit_time)}
             await asyncio.sleep(0.5)
-        # 分三種故障，不要全部報成驗證碼。判準是「生成請求有沒有送出去」，
-        # 不是 /api/c/check 回什麼 —— 那個值對所有人都是 true。
         if self.generate_submitted:
             raise GenerationError(
                 "submit_failed",
-                "生成請求送出去了，但 90 秒內 feed 沒有出現新 clip。"
-                "可能是 Suno 那端塞住，或是 feed 的側錄漏掉了。")
+                "Yêu cầu tạo nhạc đã được gửi nhưng không xuất hiện bài hát mới trong 90 giây. "
+                "Có thể do máy chủ Suno bị tắc nghẽn hoặc gói tin bị bỏ lỡ.")
         if self.turnstile_errors:
             raise GenerationError(
                 "captcha_unsolved",
-                "前端卡在 Cloudflare Turnstile，解不出 token，所以生成請求"
-                f"從來沒有送出去。攔到的錯誤：{self.turnstile_errors[-1]}。"
-                "300010 那一類屬於挑戰執行失敗，不一定代表被判定成機器人。")
+                "Giao diện bị nghẽn tại Cloudflare Turnstile và không giải được token nên yêu cầu chưa gửi đi được. "
+                f"Lỗi thu thập: {self.turnstile_errors[-1]}.")
         raise GenerationError(
             "submit_failed",
-            "按了 Create，但沒有任何生成請求送出去，也沒有攔到 Turnstile 錯誤。"
-            "可能是按鈕沒真的被按到、表單狀態不對，或前端卡在別的地方。"
-            f"（參考：/api/c/check 回 required={self.captcha_required}，"
-            "這個值對所有人都是 true，不是失敗原因）")
+            "Đã nhấn Create nhưng không có yêu cầu tạo nhạc nào được gửi đi. "
+            f"(Tham khảo: /api/c/check trả về required={self.captcha_required})")
 
     async def _wait_terminal(self, page: Page, ids: set[str],
                              refresh_interval: float = 20.0) -> list[RawClip]:

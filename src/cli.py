@@ -1,4 +1,4 @@
-"""suno-web CLI"""
+"""suno-web CLI - Công cụ dòng lệnh tự động hóa Suno Web"""
 from __future__ import annotations
 
 import argparse
@@ -9,40 +9,38 @@ import shutil
 import subprocess
 import sys
 import time
-import time
 from pathlib import Path
 
 
 def _default_server() -> str:
-    """服務位址預設吃 SUNO_WEB_SERVER，沒設才用本機。服務跑在別台機器時
-    （例如部署在 .11），設一次環境變數就不用每個指令都打 --server。"""
+    """Địa chỉ dịch vụ mặc định từ SUNO_WEB_SERVER, nếu không cài đặt sẽ dùng localhost."""
     return os.getenv("SUNO_WEB_SERVER", "http://localhost:8071")
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="suno-web", description="Suno 網頁版自動化")
+    parser = argparse.ArgumentParser(prog="suno-web", description="Tự động hóa phiên bản Suno Web")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("install", help="安裝 Playwright Chromium")
-    p_login = sub.add_parser("login", help="開瀏覽器人工登入 Suno")
+    sub.add_parser("install", help="Kiểm tra và cấu hình trình duyệt Google Chrome")
+    p_login = sub.add_parser("login", help="Mở trình duyệt để đăng nhập tài khoản Suno thủ công")
     p_login.add_argument("-w", "--worker", type=int, default=0,
-                         help="第幾個帳號，預設 0")
-    sub.add_parser("serve", help="啟動 HTTP API")
-    p_health = sub.add_parser("health", help="檢查服務狀態")
+                         help="Chỉ định số thứ tự tài khoản (mặc định 0)")
+    sub.add_parser("serve", help="Khởi chạy dịch vụ HTTP API Server")
+    p_health = sub.add_parser("health", help="Kiểm tra trạng thái hoạt động của dịch vụ")
     p_health.add_argument("--server", default=_default_server())
-    g = sub.add_parser("generate", help="生成音樂（需要 serve 在跑）")
-    g.add_argument("prompt", nargs="?", default="", help="Simple 模式描述")
-    g.add_argument("--lyrics-file", help="Custom 模式：歌詞檔路徑")
-    g.add_argument("--style", help="Custom 模式：曲風")
-    g.add_argument("--title", help="Custom 模式：歌名")
-    g.add_argument("--instrumental", action="store_true", help="純音樂")
-    g.add_argument("-o", "--output", default=".", help="輸出目錄")
+    g = sub.add_parser("generate", help="Tạo bài hát mới (yêu cầu dịch vụ serve đang chạy)")
+    g.add_argument("prompt", nargs="?", default="", help="Mô tả bài hát (Chế độ Simple)")
+    g.add_argument("--lyrics-file", help="Chế độ Custom: Đường dẫn tệp chứa lời bài hát")
+    g.add_argument("--style", help="Chế độ Custom: Phong cách âm nhạc (Style)")
+    g.add_argument("--title", help="Chế độ Custom: Tiêu đề bài hát")
+    g.add_argument("--instrumental", action="store_true", help="Nhạc không lời (Instrumental)")
+    g.add_argument("-o", "--output", default=".", help="Thư mục lưu tệp âm thanh (mặc định .)")
     g.add_argument("--server", default=_default_server())
     g.add_argument("--api-key", default=os.getenv("SUNO_WEB_API_KEY", ""))
     return parser
 
 
 def _install_commands() -> None:
-    """偵測 Claude Code 與 Gemini CLI，把 slash command 裝進去（同 gemini-web）。"""
+    """Tự động phát hiện Claude Code & Gemini CLI để cài đặt lệnh slash command."""
     src = Path(__file__).parent / "commands"
     if not src.is_dir():
         return
@@ -57,40 +55,37 @@ def _install_commands() -> None:
             shutil.copy2(f, dest / f.name)
         installed.append(f"{label} → {dest}")
     if installed:
-        print("slash command 已安裝：")
+        print("Lệnh Slash Command đã được cài đặt:")
         for line in installed:
             print(f"  {line}")
-        print("用法：/suno 想要什麼樣的音樂")
+        print("Cách dùng: /suno <mô tả bài hát bạn muốn tạo>")
 
 
 def _install() -> None:
-    """檢查真 Chrome 在不在。不下載 Playwright 內建的 Chromium：本服務是
-    自己啟動真 Chrome 再用 CDP 接上去，內建那顆過不了 Suno 的驗證。"""
+    """Kiểm tra sự tồn tại của Chrome chính thức."""
+    from .browser import resolve_chrome_binary
     from .config import settings
 
-    found = shutil.which(settings.chrome_binary)
-    if found:
-        print(f"找到 Chrome：{found}")
+    try:
+        found = resolve_chrome_binary(settings.chrome_binary)
+        print(f"Đã tìm thấy Chrome: {found}")
         _install_commands()
-        print("接著跑 suno-web login 登入 Suno。")
+        print("Tiếp theo hãy chạy 'suno-web login' để đăng nhập tài khoản Suno.")
         return
-    print(f"找不到 Chrome 執行檔「{settings.chrome_binary}」。")
-    print("Ubuntu 可以這樣裝：")
+    except RuntimeError:
+        pass
+    print(f"Không tìm thấy tệp thực thi Chrome «{settings.chrome_binary}».")
+    print("Hướng dẫn cài đặt trên Ubuntu:")
     print("  wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb")
     print("  sudo apt install ./google-chrome-stable_current_amd64.deb")
-    print("沒有 root 的機器可以解到自己的目錄，再用環境變數指過去：")
+    print("Nếu không có quyền root, giải nén vào thư mục cá nhân và đặt biến môi trường:")
     print("  dpkg-deb -x google-chrome-stable_current_amd64.deb ~/opt/chrome")
     print("  CHROME_BINARY=~/opt/chrome/opt/google/chrome/chrome")
     sys.exit(1)
 
 
 def login_chrome_args(chrome: str, profile: str, settings) -> list[str]:
-    """登入用的 Chrome 參數。跟 browser.py 保持一致的那兩項：
-
-    - `--password-store=basic`：cookie 用固定金鑰加密，profile 才搬得動
-    - `--no-sandbox`：沙箱起不來的機器（把 deb 解到家目錄、chrome-sandbox
-      沒有 root 的 setuid 位元）非有不可，否則 Chrome 一啟動就中止
-    """
+    """Các tham số khởi chạy Chrome khi đăng nhập."""
     args = [chrome, f"--user-data-dir={profile}", "--no-first-run",
             "--no-default-browser-check", "--password-store=basic"]
     if settings.chrome_no_sandbox:
@@ -100,40 +95,27 @@ def login_chrome_args(chrome: str, profile: str, settings) -> list[str]:
 
 
 def _login(worker: int = 0) -> None:
-    """開一個普通的 Chrome 讓人登入，全程不接 CDP。
-
-    為什麼不用 BrowserManager：那支會帶 --remote-debugging-port 再讓
-    Playwright 接上去，而 Suno 的 Clerk 在登入流程掛了 Cloudflare Turnstile，
-    被程式驅動的瀏覽器過不了那一關（實測 auth.suno.com/v1/client/verify 會
-    收到 captcha_error=600010，畫面就變成 Initialization Error）。
-
-    這不是 Google 的問題：Google 的登入頁在自動化瀏覽器裡照樣載入，所以
-    gemini-web 那種只走 Google 的服務不受影響。登入這一步本來就不需要自動化，
-    開起來、等人登完、等視窗關掉就好；服務要用時再接 CDP。
-    """
+    """Mở trình duyệt Chrome chuẩn để người dùng đăng nhập tài khoản Suno thủ công."""
+    from .browser import resolve_chrome_binary
     from .config import get_worker_profile_dir, settings
 
-    chrome = shutil.which(settings.chrome_binary)
-    if not chrome:
-        print(f"找不到 Chrome 執行檔「{settings.chrome_binary}」，先跑 suno-web install")
+    try:
+        chrome = resolve_chrome_binary(settings.chrome_binary)
+    except RuntimeError:
+        print(f"Không tìm thấy tệp thực thi Chrome «{settings.chrome_binary}», vui lòng chạy 'suno-web install' trước.")
         sys.exit(1)
     profile = Path(get_worker_profile_dir(worker))
     profile.mkdir(parents=True, exist_ok=True)
 
-    # 沒有 DISPLAY 就開不出視窗。遠端登入時最常見的原因是用了一般 ssh，
-    # 少了 -X，那樣 Chrome 會一啟動就退出，看起來像「秒關」。
-    if not os.getenv("DISPLAY") and not os.getenv("WAYLAND_DISPLAY"):
-        print("沒有 DISPLAY，開不出瀏覽器視窗。")
-        print("如果是從別台機器連進來，改用：ssh -X <這台>，再跑一次這個指令。")
+    if sys.platform != "win32" and not os.getenv("DISPLAY") and not os.getenv("WAYLAND_DISPLAY"):
+        print("Không có biến DISPLAY, không thể mở cửa sổ trình duyệt.")
+        print("Nếu bạn đang kết nối từ xa, vui lòng dùng lệnh: ssh -X <ip-server> và thử lại.")
         sys.exit(1)
 
-    print(f"帳號 {worker} 的 profile：{profile}")
-    print("瀏覽器開好了。請在裡面登入 Suno（Google 或 email 都可以，這個視窗"
-          "沒有被程式驅動）。")
-    print("登完、確認看得到 Create 頁面之後，**把瀏覽器視窗關掉**，這裡就會"
-          "自動驗證。不要在這裡按 Ctrl-C，那樣 cookie 可能沒寫回去。")
+    print(f"Thư mục Profile của tài khoản {worker}: {profile}")
+    print("Đã mở trình duyệt Chrome. Vui lòng đăng nhập Suno trong cửa sổ vừa mở.")
+    print("Sau khi hoàn tất đăng nhập và nhìn thấy trang Create, **hãy đóng cửa sổ Chrome lại** để hệ thống tự động xác minh. Vui lòng không nhấn Ctrl-C.")
     args = login_chrome_args(chrome, str(profile), settings)
-    # Chrome 的 stderr 留著：它開不起來時的原因只寫在這裡。
     err_path = profile / "chrome-login-stderr.log"
     started = time.time()
     with err_path.open("w", encoding="utf-8") as err:
@@ -141,17 +123,16 @@ def _login(worker: int = 0) -> None:
         proc.wait()
     if time.time() - started < 5:
         tail = err_path.read_text(encoding="utf-8", errors="replace").strip()
-        print("瀏覽器一開就結束了，代表視窗根本沒出現。Chrome 說：")
-        print(f"  {tail[-500:] or '（沒有輸出）'}")
-        print("常見原因：同一個 profile 已經有另一個 Chrome 開著，"
-              "或這個連線沒有 X 轉發（改用 ssh -X）。")
+        print("Trình duyệt đóng ngay sau khi mở. Thông báo chi tiết từ Chrome:")
+        print(f"  {tail[-500:] or '(Không có kết xuất)'}")
+        print("Nguyên nhân thường gặp: Profile này đang mở bởi một phiên Chrome khác hoặc thiếu chuyển tiếp X11 (dùng ssh -X).")
         sys.exit(1)
-    print("視窗關掉了，驗證登入態……")
+    print("Đã đóng cửa sổ trình duyệt, đang xác minh trạng thái đăng nhập...")
     asyncio.run(_verify_login(worker))
 
 
 async def _verify_login(worker: int) -> None:
-    """用無頭瀏覽器確認那份 profile 真的是登入狀態，順便讀點數。"""
+    """Xác minh trạng thái đăng nhập và kiểm tra điểm credits còn lại."""
     from .browser import BrowserManager
     from .config import get_worker_profile_dir, settings
     from .suno import SunoRunner
@@ -161,7 +142,7 @@ async def _verify_login(worker: int) -> None:
     try:
         await bm.start()
     except Exception as e:
-        print(f"驗證時瀏覽器起不來：{e}")
+        print(f"Lỗi khởi chạy trình duyệt khi xác minh: {e}")
         return
     runner = SunoRunner(bm, settings)
     try:
@@ -169,16 +150,16 @@ async def _verify_login(worker: int) -> None:
         try:
             await runner._ensure_on_create_page(bm.page)
         except Exception as e:
-            print(f"看起來還沒登入成功：{e}")
+            print(f"Có vẻ như tài khoản chưa được đăng nhập thành công: {e}")
             return
         for _ in range(10):
             await bm.page.wait_for_timeout(2000)
             if runner.last_credits is not None:
                 break
         credits = runner.last_credits
-        print(f"帳號 {worker} 登入成功。"
-              + (f"剩餘點數 {credits}（可生 {credits // 10} 單）"
-                 if credits is not None else "點數讀不到，跑一單之後才會有值"))
+        print(f"Tài khoản {worker} đăng nhập thành công."
+              + (f" Số điểm còn lại: {credits} (tạo được khoảng {credits // 10} bài)"
+                 if credits is not None else " Chưa đọc được số điểm, số điểm sẽ cập nhật sau khi tạo bài đầu tiên"))
     finally:
         await bm.stop()
 
@@ -204,8 +185,8 @@ def _serve() -> None:
     )
     app = create_app(settings=settings, store=store, queue=queue, pool=pool,
                      health_extra=pool.summary)
-    print(f"帳號數（WORKER_COUNT）：{pool.settings.worker_count}"
-          f"，瀏覽器隨用隨開，閒置 {settings.idle_shutdown_minutes} 分鐘關閉")
+    print(f"Số lượng tài khoản (WORKER_COUNT): {pool.settings.worker_count}"
+          f", Trình duyệt tự mở khi dùng và đóng sau {settings.idle_shutdown_minutes} phút không hoạt động.")
     uvicorn.run(app, host=settings.host, port=settings.port)
 
 
@@ -219,7 +200,7 @@ def _health(args) -> None:
     try:
         resp = httpx.get(f"{args.server.rstrip('/')}/api/health", timeout=10)
     except httpx.ConnectError:
-        print(f"連不上 {args.server} — 服務沒起來?先跑 suno-web serve")
+        print(f"Không thể kết nối đến {args.server} — Dịch vụ chưa chạy? Vui lòng chạy 'suno-web serve' trước.")
         sys.exit(1)
     print(json.dumps(resp.json(), ensure_ascii=False, indent=2))
 
@@ -239,7 +220,7 @@ def _generate(args) -> None:
             body["title"] = args.title
     else:
         if not args.prompt:
-            print("要嘛給 prompt，要嘛給 --lyrics-file / --style")
+            print("Vui lòng cung cấp mô tả (prompt) hoặc truyền tham số --lyrics-file / --style")
             sys.exit(2)
         body["prompt"] = args.prompt
 
@@ -247,13 +228,13 @@ def _generate(args) -> None:
         resp = httpx.post(f"{base}/api/generate", json=body, headers=headers,
                           timeout=30)
     except httpx.ConnectError:
-        print(f"連不上 {args.server} — 服務沒起來?先跑 suno-web serve")
+        print(f"Không thể kết nối đến {args.server} — Dịch vụ chưa chạy? Vui lòng chạy 'suno-web serve' trước.")
         sys.exit(1)
     if resp.status_code != 200:
-        print(f"送單失敗 {resp.status_code}: {resp.text}")
+        print(f"Gửi yêu cầu thất bại {resp.status_code}: {resp.text}")
         sys.exit(1)
     job_id = resp.json()["job_id"]
-    print(f"job {job_id} 已送出，等生成（通常 2-4 分鐘）...")
+    print(f"Yêu cầu Job {job_id} đã được gửi thành công, đang chờ tạo nhạc (thường mất 2-4 phút)...")
 
     while True:
         time.sleep(5)
@@ -261,30 +242,30 @@ def _generate(args) -> None:
             job = httpx.get(f"{base}/api/jobs/{job_id}", headers=headers,
                             timeout=30).json()
         except httpx.ConnectError:
-            print("連線中斷,5 秒後重試...")
+            print("Kết nối bị ngắt, đang thử lại sau 5 giây...")
             continue
         if job["status"] in ("done", "error"):
             break
-        print(f"  {job['status']}...")
+        print(f"  Trạng thái: {job['status']}...")
 
     if job["status"] == "error":
-        print(f"失敗：{job['error']} {job.get('error_message') or ''}")
+        print(f"Tạo nhạc thất bại: {job['error']} {job.get('error_message') or ''}")
         sys.exit(1)
 
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     for clip in job["clips"]:
         if not clip.get("downloadable"):
-            print(f"  跳過（不可下載）：{clip.get('title') or clip['id']}")
+            print(f"  Bỏ qua (Chưa sẵn sàng tải xuống): {clip.get('title') or clip['id']}")
             continue
         audio = httpx.get(f"{base}{clip['audio_url']}", headers=headers,
                           timeout=120)
         if audio.status_code != 200:
-            print(f"  下載失敗（HTTP {audio.status_code}）：{clip.get('title') or clip['id']}")
+            print(f"  Tải thất bại (HTTP {audio.status_code}): {clip.get('title') or clip['id']}")
             continue
         dest = out / f"{clip['id']}.mp3"
         dest.write_bytes(audio.content)
-        print(f"  已存：{dest}（{clip.get('duration')}s）")
+        print(f"  Đã lưu tệp: {dest} ({clip.get('duration')} giây)")
 
 
 def main() -> None:
@@ -299,3 +280,8 @@ def main() -> None:
         _health(args)
     elif args.cmd == "generate":
         _generate(args)
+
+
+if __name__ == "__main__":
+    main()
+

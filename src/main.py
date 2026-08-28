@@ -1,4 +1,4 @@
-"""HTTP API — job 式音樂生成服務"""
+"""HTTP API - Dịch vụ tạo nhạc tự động dạng Job"""
 from __future__ import annotations
 
 import asyncio
@@ -41,12 +41,12 @@ def build_params(req: GenerateRequest, default_timeout: int) -> dict[str, Any]:
     if not custom and not prompt:
         raise HTTPException(
             status_code=400,
-            detail="invalid_request: prompt 或 lyrics/style 至少要有一個",
+            detail="invalid_request: Phải có ít nhất prompt hoặc lyrics/style",
         )
     if lyrics and req.instrumental:
         raise HTTPException(
             status_code=400,
-            detail="invalid_request: instrumental 與 lyrics 不能同時給（純音樂沒有歌詞欄）",
+            detail="invalid_request: instrumental và lyrics không thể dùng đồng thời (Nhạc không lời không có phần lời bài hát)",
         )
     return {
         "mode": "custom" if custom else "simple",
@@ -63,13 +63,10 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        # 服務重啟前卡在 queued/generating 的 job 永遠不會再被排到（queue 是
-        # 純記憶體佇列），不作廢的話 client 會永遠輪詢不到終態。
         admin_db.init_db()
-        store.fail_unfinished("服務重啟，重啟前未完成的 job 一律作廢")
+        store.fail_unfinished("Dịch vụ khởi động lại, các job chưa hoàn tất trước đó bị hủy bỏ")
         if browser is not None:
             await browser.start()
-        # 一個帳號一條 worker_loop；瀏覽器由 pool 隨用隨開，這裡不預先啟動。
         tasks = [asyncio.create_task(queue.worker_loop(i))
                  for i in range(queue.worker_count)]
         if pool is not None:
@@ -88,16 +85,11 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
     app = FastAPI(lifespan=lifespan)
 
     def require_key(request: Request) -> str | None:
-        """通過就回「這把金鑰的名稱」給 handler 記進 job；沒設任何金鑰時回 None。
-
-        兩種來源都認：.env 的 API_KEYS（靜態、改了要重啟）與 admin 頁面現場
-        發的動態金鑰（存雜湊在 admin.db）。只要其中一邊設了金鑰就強制驗證。
-        """
         provided = request.headers.get("x-api-key")
         if is_authorized(provided, settings.api_keys) and not admin_db.has_any_dynamic_key():
             return None
         if provided and provided in settings.api_keys:
-            return ".env 靜態金鑰"
+            return "API Key tĩnh .env"
         row = admin_db.get_api_key_by_token(provided) if provided else None
         if row and row["enabled"]:
             admin_db.mark_api_key_used(row["id"])

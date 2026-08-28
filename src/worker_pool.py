@@ -41,7 +41,7 @@ class Worker:
             if self._browser is None or not self._browser.is_alive():
                 if self._browser is not None:
                     await self._browser.stop()
-                log.info("worker %s：啟動瀏覽器（%s）", self.id, self.profile_dir)
+                log.info("worker %s: Khởi chạy trình duyệt (%s)", self.id, self.profile_dir)
                 self._browser = BrowserManager(profile_dir=self.profile_dir)
                 await self._browser.start()
                 self._runner = SunoRunner(self._browser, self._settings)
@@ -75,7 +75,7 @@ class Worker:
         if (self.busy or self._browser is None or idle_seconds <= 0
                 or time.time() - self.last_used < idle_seconds):
             return False
-        log.info("worker %s：閒置超過 %.0f 秒，關掉瀏覽器", self.id, idle_seconds)
+        log.info("worker %s: Đã rảnh rỗi hơn %.0f giây, đóng trình duyệt", self.id, idle_seconds)
         await self.stop()
         return True
 

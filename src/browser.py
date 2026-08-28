@@ -22,6 +22,37 @@ _PORT_FILE = "DevToolsActivePort"
 _PORT_WAIT_SECONDS = 40.0
 
 
+def resolve_chrome_binary(chrome_binary: str | None = None) -> str:
+    binary = chrome_binary or settings.chrome_binary
+    found = shutil.which(binary)
+    if found:
+        return found
+    if Path(binary).is_file():
+        return binary
+    import sys
+    if sys.platform != "win32" and (binary == "google-chrome" or not chrome_binary):
+        linux_candidates = ["google-chrome-stable", "chromium", "chromium-browser"]
+        for cand in linux_candidates:
+            found = shutil.which(cand)
+            if found:
+                return found
+    if sys.platform == "win32" and (binary == "google-chrome" or not chrome_binary):
+        import os
+        win_candidates = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+        ]
+        for cand in win_candidates:
+            if Path(cand).is_file():
+                return cand
+    raise RuntimeError(
+        f"Không tìm thấy thực thi Chrome «{binary}». Vui lòng cài đặt Google Chrome, "
+        "hoặc sử dụng biến môi trường CHROME_BINARY để chỉ định đường dẫn đầy đủ đến tệp thực thi. "
+        "Không dùng Chromium tích hợp của Playwright vì không vượt qua được xác thực Turnstile của Suno."
+    )
+
+
 class BrowserManager:
     def __init__(self, headless: bool | None = None,
                  profile_dir: str | None = None,
@@ -39,16 +70,7 @@ class BrowserManager:
         self._stderr_file = None
 
     def _resolve_chrome(self) -> str:
-        found = shutil.which(self._chrome_binary)
-        if found:
-            return found
-        if Path(self._chrome_binary).is_file():
-            return self._chrome_binary
-        raise RuntimeError(
-            f"找不到 Chrome 執行檔「{self._chrome_binary}」。請安裝 Google Chrome，"
-            "或用環境變數 CHROME_BINARY 指到執行檔的完整路徑。"
-            "不要改用 Playwright 內建的 Chromium，那個過不了 Suno 的 Turnstile 驗證。"
-        )
+        return resolve_chrome_binary(self._chrome_binary)
 
     async def start(self) -> None:
         chrome = self._resolve_chrome()
@@ -100,7 +122,7 @@ class BrowserManager:
             if self._proc is not None and self._proc.poll() is not None:
                 await self._kill_process()
                 raise RuntimeError(
-                    "Chrome 啟動後立刻結束了。Chrome 自己說："
+                    "Chrome đã thoát ngay sau khi khởi động. Thông báo từ Chrome: "
                     f"{self._read_stderr_tail()}"
                 )
             if port_file.is_file():
@@ -110,17 +132,17 @@ class BrowserManager:
             await asyncio.sleep(0.2)
         await self._kill_process()
         raise RuntimeError(
-            f"等不到 Chrome 的 DevToolsActivePort（{_PORT_WAIT_SECONDS} 秒）。"
-            f"Chrome 的輸出：{self._read_stderr_tail()}")
+            f"Không đợi được DevToolsActivePort của Chrome (quá {_PORT_WAIT_SECONDS} giây). "
+            f"Kết xuất từ Chrome: {self._read_stderr_tail()}")
 
     def _read_stderr_tail(self, lines: int = 4) -> str:
         if self._stderr_file is not None:
             self._stderr_file.flush()
         if self._stderr_path is None or not self._stderr_path.is_file():
-            return "（沒有輸出）"
+            return "(Không có kết xuất)"
         tail = self._stderr_path.read_text(encoding="utf-8",
                                            errors="replace").splitlines()[-lines:]
-        return " / ".join(t.strip() for t in tail) or "（沒有輸出）"
+        return " / ".join(t.strip() for t in tail) or "(Không có kết xuất)"
 
     async def _kill_process(self) -> None:
         """只終止自己起的那一個 Chrome，不掃全域，多帳號才不會互相波及。"""

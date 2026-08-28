@@ -185,7 +185,7 @@ def test_captcha_required_alone_is_not_a_failure_reason():
     with pytest.raises(GenerationError) as e:
         asyncio.run(runner._wait_new_ids(set(), 0.0, timeout=0.01))
     assert e.value.code == "submit_failed"
-    assert "沒有任何生成請求送出去" in e.value.message
+    assert "không có yêu cầu tạo nhạc nào được gửi đi" in e.value.message
 
 
 def test_turnstile_error_reports_captcha_unsolved():
@@ -219,7 +219,7 @@ def test_submitted_but_no_clip_is_a_different_failure():
         asyncio.run(runner._wait_new_ids(set(), 0.0, timeout=0.01))
     # 送出去了就不是驗證碼的問題，即使同時攔到 Turnstile 錯誤
     assert e.value.code == "submit_failed"
-    assert "feed 沒有出現新 clip" in e.value.message
+    assert "không xuất hiện bài hát mới trong 90 giây" in e.value.message
 
 
 def test_feed_parsing_picks_up_lyrics_from_metadata_prompt():

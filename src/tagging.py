@@ -30,7 +30,7 @@ def tag_mp3(path: Path, *, title: str, artist: str = "", album: str = "",
     寫失敗只記一行 log。音檔本身是好的，標籤沒寫進去不該讓整單失敗。
     """
     if not path.is_file():
-        log.warning("要加標籤的檔案不存在：%s", path)
+        log.warning("File âm thanh để ghi thẻ ID3 không tồn tại: %s", path)
         return False
 
     from .config import settings
@@ -42,7 +42,7 @@ def tag_mp3(path: Path, *, title: str, artist: str = "", album: str = "",
         from mutagen.id3 import (APIC, ID3, ID3NoHeaderError, TALB, TENC, TIT2,
                                  TPE1, USLT)
     except ImportError:
-        log.warning("mutagen 未安裝，mp3 不會帶標籤")
+        log.warning("Thư viện mutagen chưa được cài đặt, file mp3 sẽ không gắn thẻ ID3")
         return False
 
     try:
@@ -69,5 +69,5 @@ def tag_mp3(path: Path, *, title: str, artist: str = "", album: str = "",
         tags.save(str(path), v2_version=3)
         return True
     except Exception as e:
-        log.warning("寫 ID3 標籤失敗 %s：%s", path.name, e)
+        log.warning("Ghi thẻ ID3 thất bại %s: %s", path.name, e)
         return False

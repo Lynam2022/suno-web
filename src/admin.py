@@ -26,10 +26,10 @@ from .security import (constant_equals, create_admin_session,
 _COOKIE = "suno_admin"
 
 _NAV = (
-    ("overview", "/admin", "總覽", "◎"),
-    ("keys", "/admin/keys", "金鑰", "⌘"),
-    ("test", "/admin/test", "測試", "▶"),
-    ("history", "/admin/history", "歷史", "☰"),
+    ("overview", "/admin", "Tổng quan", "◎"),
+    ("keys", "/admin/keys", "Thẻ API Key", "⌘"),
+    ("test", "/admin/test", "Thử nghiệm", "▶"),
+    ("history", "/admin/history", "Lịch sử", "☰"),
 )
 
 _CSS = """
@@ -45,7 +45,7 @@ body{margin:0;background:var(--bg);color:var(--ink);
 a{color:inherit}
 .topbar{display:flex;align-items:center;gap:12px;padding:14px 22px;
   border-bottom:1px solid var(--line);background:#1a1513}
-.logo{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+.logo{width:30px;height:30px;border-radius:99px;display:grid;place-items:center;
   background:linear-gradient(135deg,var(--accent),var(--accent2));color:#16110f;
   font-weight:700}
 .brand{font-size:17px;font-weight:700;letter-spacing:.2px}
@@ -141,7 +141,6 @@ def _fmt_epoch(ts: float | None) -> str:
 
 
 def _fmt_iso(value: str | None) -> str:
-    """資料庫存 UTC ISO 字串，顯示轉本地時間（這台是 UTC+8）。"""
     if not value:
         return "-"
     try:
@@ -170,12 +169,12 @@ def create_admin_router(*, settings: Settings, store: JobStore,
             for key, href, label, ico in _NAV)
         meta_refresh = (f'<meta http-equiv="refresh" content="{refresh}">'
                         if refresh else "")
-        return HTMLResponse(f"""<!doctype html><html lang="zh-Hant"><head>
+        return HTMLResponse(f"""<!doctype html><html lang="vi"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 {meta_refresh}<title>{_esc(title)} — suno-web</title><style>{_CSS}</style></head><body>
-<div class="topbar"><div class="logo">S</div><div class="brand">suno-web 管理台</div>
+<div class="topbar"><div class="logo">S</div><div class="brand">Quản trị suno-web</div>
 <div class="right"><span class="chip">{_esc(user)}</span>
-<a class="btn-out" href="{url('/admin/logout')}">登出</a></div></div>
+<a class="btn-out" href="{url('/admin/logout')}">Đăng xuất</a></div></div>
 <div class="shell"><aside>{nav}</aside>
 <main><h1>{_esc(title)}</h1><p class="sub">{subtitle}</p>{body}</main></div>
 </body></html>""")
@@ -187,24 +186,24 @@ def create_admin_router(*, settings: Settings, store: JobStore,
     def _to_login() -> RedirectResponse:
         return RedirectResponse(url("/admin/login"), status_code=303)
 
-    # ---- 登入 ----
+    # ---- Đăng nhập ----
 
     @router.get("/admin/login", response_class=HTMLResponse)
     async def login_page(err: str = "") -> HTMLResponse:
-        warn = ('<p><span class="pill bad">帳號或密碼不對</span></p>' if err else "")
-        return HTMLResponse(f"""<!doctype html><html lang="zh-Hant"><head>
+        warn = ('<p><span class="pill bad">Tên đăng nhập hoặc mật khẩu không chính xác</span></p>' if err else "")
+        return HTMLResponse(f"""<!doctype html><html lang="vi"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>登入 — suno-web</title><style>{_CSS}</style></head><body>
+<title>Đăng nhập — suno-web</title><style>{_CSS}</style></head><body>
 <div class="login-wrap"><div class="card">
 <div class="rowgap" style="align-items:center;margin-bottom:14px">
-<div class="logo">S</div><div class="brand">suno-web 管理台</div></div>{warn}
+<div class="logo">S</div><div class="brand">Quản trị suno-web</div></div>{warn}
 <form method="post" action="{url('/admin/login')}">
-<label class="field"><span>帳號</span>
+<label class="field"><span>Tên đăng nhập</span>
 <input type="text" name="username" autofocus autocomplete="username"></label>
-<label class="field"><span>密碼</span>
+<label class="field"><span>Mật khẩu</span>
 <input type="password" name="password" autocomplete="current-password"></label>
-<label class="check"><input type="checkbox" name="remember"> 記住我 30 天</label>
-<button type="submit">登入</button></form></div></div></body></html>""")
+<label class="check"><input type="checkbox" name="remember"> Ghi nhớ đăng nhập 30 ngày</label>
+<button type="submit">Đăng nhập</button></form></div></div></body></html>""")
 
     @router.post("/admin/login")
     async def login(username: str = Form(""), password: str = Form(""),
@@ -246,18 +245,18 @@ def create_admin_router(*, settings: Settings, store: JobStore,
         # 所以擺第一格，而且直接換算成「還能生幾單」——那才是要做決定時看的數字。
         if isinstance(credits, (int, float)):
             credit_cell = (f'<b>{int(credits)}</b>'
-                           f'<small>剩餘點數（還能生 {int(credits) // 10} 單）</small>')
+                           f'<small>Điểm còn lại (Tạo được ~{int(credits) // 10} bài)</small>')
         else:
-            credit_cell = ('<b class="muted">尚未觀測</b>'
-                           '<small>剩餘點數（跑過一單才有值）</small>')
+            credit_cell = ('<b class="muted">Chưa cập nhật</b>'
+                           '<small>Điểm còn lại (Cập nhật sau 1 bài)</small>')
         uptime_h = (time.time() - started_at) / 3600
         uptime = f"{uptime_h:.1f}h" if uptime_h >= 1 else f"{int(uptime_h * 60)}m"
         stats = f"""<div class="stats">
 <div class="stat">{credit_cell}</div>
-<div class="stat"><b>{len(running)}</b><small>正在跑／排隊</small></div>
-<div class="stat"><b style="color:var(--ok)">{len(done)}</b><small>近期成功</small></div>
-<div class="stat"><b style="color:var(--bad)">{failed}</b><small>近期失敗</small></div>
-<div class="stat"><b>{uptime}</b><small>服務執行時間</small></div>
+<div class="stat"><b>{len(running)}</b><small>Đang xử lý / Hàng đợi</small></div>
+<div class="stat"><b style="color:var(--ok)">{len(done)}</b><small>Thành công gần đây</small></div>
+<div class="stat"><b style="color:var(--bad)">{failed}</b><small>Thất bại gần đây</small></div>
+<div class="stat"><b>{uptime}</b><small>Thời gian hoạt động</small></div>
 </div>"""
 
         now_card = ""
@@ -267,46 +266,43 @@ def create_admin_router(*, settings: Settings, store: JobStore,
                 f'<td>{_esc(_describe(j.params)[:60])}</td>'
                 f'<td class="muted">{_fmt_epoch(j.created_at)}</td>'
                 f'<td class="muted">{_esc(j.id)}</td></tr>' for j in running)
-            now_card = (f'<div class="card"><h2>現在在跑</h2>'
-                        f'<p class="hint">這頁每 15 秒自動更新。一單通常 2 到 4 分鐘。</p>'
-                        f'<table><tr><th>狀態</th><th>內容</th><th>送出時間</th>'
-                        f'<th>job</th></tr>{rows}</table></div>')
+            now_card = (f'<div class="card"><h2>Đang xử lý</h2>'
+                        f'<p class="hint">Trang tự động cập nhật mỗi 15 giây. Mỗi bài mất khoảng 2-4 phút.</p>'
+                        f'<table><tr><th>Trạng thái</th><th>Nội dung</th><th>Thời gian gửi</th>'
+                        f'<th>Job ID</th></tr>{rows}</table></div>')
 
-        # 最近完成的幾單直接附播放器：這服務的產出是聲音，要判斷「跑出來的東西
-        # 對不對」只能用聽的，讓人再點兩層才聽得到並不合理。
         latest = "".join(
             f'<div style="margin-bottom:14px"><div class="muted">'
             f'{_fmt_epoch(j.created_at)}・{_esc(_describe(j.params)[:50])}</div>'
             f'{_clips_html(j, url)}</div>' for j in done[:3])
-        listen_card = (f'<div class="card"><h2>最近完成</h2>'
+        listen_card = (f'<div class="card"><h2>Bài hoàn thành gần đây</h2>'
                        f'<p class="hint"><a class="link" href="{url("/admin/history")}">'
-                       f'看完整歷史 →</a></p>{latest}</div>' if latest else "")
+                       f'Xem toàn bộ lịch sử →</a></p>{latest}</div>' if latest else "")
 
-        # 多帳號時列出每個帳號：配額攤得平不平、哪個帳號快用完，一眼看到
         workers = info.get("workers") or []
         worker_card = ""
         if len(workers) > 1:
             wrows = "".join(_worker_row(w) for w in workers)
             worker_card = (
-                '<div class="card"><h2>帳號</h2>'
-                '<p class="hint">派工輪流，把每月配額攤在各帳號上。'
-                '瀏覽器隨用隨開，閒置會自動休眠省記憶體。</p>'
-                '<table><tr><th>#</th><th>狀態</th><th>剩餘點數</th>'
-                '<th>成功</th><th>失敗</th><th>最後使用</th></tr>'
+                '<div class="card"><h2>Danh sách Tài khoản</h2>'
+                '<p class="hint">Phân bổ luân phiên giữa các tài khoản. '
+                'Trình duyệt tự động mở và ngủ khi rảnh để tiết kiệm bộ nhớ.</p>'
+                '<table><tr><th>#</th><th>Trạng thái</th><th>Điểm còn lại</th>'
+                '<th>Thành công</th><th>Thất bại</th><th>Dùng lần cuối</th></tr>'
                 f'{wrows}</table></div>')
 
         keys = admin_db.list_api_keys()
-        state_card = f"""<div class="card"><h2>服務狀態</h2><table>
-<tr><th>項目</th><th>狀態</th></tr>
-<tr><td>瀏覽器</td><td><span class="pill {'ok' if alive else 'bad'}">
-{'活著' if alive else '沒起來'}</span></td></tr>
-<tr><td>Suno 登入</td><td><span class="pill {'ok' if info.get('logged_in') else 'run'}">
-{'已登入' if info.get('logged_in') else '尚未觀測'}</span></td></tr>
-<tr><td>金鑰</td><td>動態 {len(keys)} 把、.env 靜態 {len(settings.api_keys)} 把</td></tr>
+        state_card = f"""<div class="card"><h2>Trạng thái Dịch vụ</h2><table>
+<tr><th>Hạng mục</th><th>Trạng thái</th></tr>
+<tr><td>Trình duyệt Chrome</td><td><span class="pill {'ok' if alive else 'bad'}">
+{'Đang hoạt động' if alive else 'Chưa bật'}</span></td></tr>
+<tr><td>Đăng nhập Suno</td><td><span class="pill {'ok' if info.get('logged_in') else 'run'}">
+{'Đã đăng nhập' if info.get('logged_in') else 'Chưa cập nhật'}</span></td></tr>
+<tr><td>Khóa API Key</td><td>Động {len(keys)} khóa, .env tĩnh {len(settings.api_keys)} khóa</td></tr>
 </table></div>"""
-        return _page(title="總覽", active="overview", user=user,
+        return _page(title="Tổng quan", active="overview", user=user,
                      refresh=15 if running else 0,
-                     subtitle="還能生幾單、現在在跑什麼、最近幾單聽起來如何。",
+                     subtitle="Số điểm còn lại, tiến độ xử lý và bài hát vừa hoàn thành.",
                      body=stats + now_card + worker_card + listen_card + state_card)
 
     # ---- 金鑰 ----
@@ -316,7 +312,7 @@ def create_admin_router(*, settings: Settings, store: JobStore,
         user = _user(request)
         if not user:
             return _to_login()
-        banner = (f'<div class="newkey"><b>新金鑰（只顯示這一次）</b>'
+        banner = (f'<div class="newkey"><b>Mã API Key mới (Chỉ hiển thị 1 lần này)</b>'
                   f'<p><code>{_esc(new)}</code></p></div>' if new else "")
         rows = []
         for k in admin_db.list_api_keys():
@@ -324,38 +320,37 @@ def create_admin_router(*, settings: Settings, store: JobStore,
             rows.append(f"""<tr>
 <td><code>{_esc(k['id'])}</code></td><td><b>{_esc(k['name'])}</b></td>
 <td><span class="pill {'ok' if k['enabled'] else 'bad'}">
-{'啟用' if k['enabled'] else '停用'}</span></td>
+{'Đang bật' if k['enabled'] else 'Đang tắt'}</span></td>
 <td>{_esc(k['requests_count'])}</td>
-<td class="muted">{_esc(_fmt_iso(k['last_used_at']) if k['last_used_at'] else '未用過')}</td>
+<td class="muted">{_esc(_fmt_iso(k['last_used_at']) if k['last_used_at'] else 'Chưa dùng')}</td>
 <td class="muted">{_esc(_fmt_iso(k['created_at']))}</td>
 <td><div class="rowgap">
 <form class="inline" method="post" action="{url(f"/admin/keys/{k['id']}/{toggle}")}">
-<button class="ghost">{'停用' if k['enabled'] else '啟用'}</button></form>
+<button class="ghost">{'Tắt' if k['enabled'] else 'Bật'}</button></form>
 <form class="inline" method="post" action="{url(f"/admin/keys/{k['id']}/delete")}"
- onsubmit="return confirm('刪掉就救不回來，確定？')">
-<button class="danger">刪除</button></form></div></td></tr>""")
+ onsubmit="return confirm('Xóa khóa API sẽ không thể phục hồi, bạn có chắc chắn?')">
+<button class="danger">Xóa</button></form></div></td></tr>""")
         static_rows = "".join(
             f'<tr><td><code>{_esc(k[:8])}…{_esc(k[-4:])}</code></td>'
-            f'<td class="muted">.env 靜態金鑰</td>'
-            f'<td><span class="pill ok">啟用</span></td>'
-            f'<td colspan="4" class="muted">改 .env 再重啟服務才會變</td></tr>'
+            f'<td class="muted">API Key tĩnh từ file .env</td>'
+            f'<td><span class="pill ok">Đang bật</span></td>'
+            f'<td colspan="4" class="muted">Thay đổi trong file .env và khởi động lại dịch vụ</td></tr>'
             for k in sorted(settings.api_keys))
         body = (rows and "".join(rows) or
-                '<tr><td colspan="7" class="muted">還沒發過動態金鑰</td></tr>')
-        return _page(title="金鑰", active="keys", user=user,
-                     subtitle="一個呼叫端發一把，歷史頁才分得出哪一單是誰送的。"
-                              "原文只在剛發出來時顯示一次，伺服器只留 sha256 雜湊。",
+                '<tr><td colspan="7" class="muted">Chưa có khóa API Key động nào được tạo</td></tr>')
+        return _page(title="Thẻ API Key", active="keys", user=user,
+                     subtitle="Tạo riêng khóa API Key cho từng ứng dụng gọi đến để phân biệt trong lịch sử.",
                      body=f"""{banner}
-<div class="card"><h2>發一把新金鑰</h2>
-<p class="hint">寫清楚用途，之後在歷史頁會看到這個名字。</p>
+<div class="card"><h2>Tạo khóa API Key mới</h2>
+<p class="hint">Nhập tên mô tả ứng dụng / thiết bị sử dụng khóa này.</p>
 <form method="post" action="{url('/admin/keys')}">
-<label class="field"><span>用途</span>
-<input type="text" name="name" placeholder="例如 筆電 CLI、line-sticker-studio"></label>
-<button type="submit">產生金鑰</button></form></div>
-<div class="card"><h2>金鑰清單</h2>
-<p class="hint">ID 欄是管理用的代號，不是金鑰本身；呼叫端要用發出當下那串原文。</p>
-<table><tr><th>ID</th><th>用途</th><th>狀態</th><th>用過</th><th>最後使用</th>
-<th>建立</th><th>操作</th></tr>{body}{static_rows}</table></div>""")
+<label class="field"><span>Mục đích sử dụng</span>
+<input type="text" name="name" placeholder="Ví dụ: Laptop CLI, App mobile"></label>
+<button type="submit">Tạo API Key</button></form></div>
+<div class="card"><h2>Danh sách khóa API Key</h2>
+<p class="hint">Cột ID là mã quản trị, ứng dụng gọi API phải dùng mã khóa gốc hiển thị lúc tạo.</p>
+<table><tr><th>ID</th><th>Mục đích</th><th>Trạng thái</th><th>Lượt dùng</th><th>Lần cuối</th>
+<th>Ngày tạo</th><th>Thao tác</th></tr>{body}{static_rows}</table></div>""")
 
     @router.post("/admin/keys")
     async def create_key(request: Request, name: str = Form("")):
@@ -374,7 +369,7 @@ def create_admin_router(*, settings: Settings, store: JobStore,
             admin_db.set_api_key_enabled(key_id, action == "enable")
         return RedirectResponse(url("/admin/keys"), status_code=303)
 
-    # ---- 測試 ----
+    # ---- Thử nghiệm ----
 
     @router.get("/admin/test", response_class=HTMLResponse)
     async def test_page(request: Request, job: str = "", err: str = ""):
@@ -388,25 +383,24 @@ def create_admin_router(*, settings: Settings, store: JobStore,
         result, refresh = "", 0
         if job:
             result, refresh = _test_result(store.get(job), url)
-        return _page(title="測試生成", active="test", user=user, refresh=refresh,
-                     subtitle="走的是真實呼叫端同一條佇列與流程，產出一樣會進歷史。"
-                              "跑一次扣 10 點。",
+        return _page(title="Thử nghiệm tạo nhạc", active="test", user=user, refresh=refresh,
+                     subtitle="Gửi yêu cầu tạo nhạc thử nghiệm trực tiếp qua trang quản trị (Mỗi bài mất 10 điểm).",
                      body=f"""{warn}
-<div class="card"><h2>送一單</h2>
-<p class="hint">只填描述就是 Simple 模式；填了曲風或歌詞就會走 Custom。</p>
+<div class="card"><h2>Gửi yêu cầu tạo nhạc</h2>
+<p class="hint">Điền Mô tả để dùng chế độ Simple; Điền Phong cách hoặc Lời bài hát để dùng chế độ Custom.</p>
 <form method="post" action="{url('/admin/test')}">
-<label class="field"><span>描述（Simple）</span>
+<label class="field"><span>Mô tả bài hát (Chế độ Simple)</span>
 <textarea name="prompt" placeholder="a warm ukulele tune about a sleepy cat"></textarea></label>
-<label class="field"><span>曲風（Custom）</span>
+<label class="field"><span>Phong cách / Style (Chế độ Custom)</span>
 <input type="text" name="style" placeholder="lo-fi hip hop"></label>
-<label class="field"><span>歌名（Custom）</span>
-<input type="text" name="title" placeholder="深夜寫程式"></label>
-<label class="field"><span>歌詞（Custom）</span>
-<textarea name="lyrics" placeholder="[Verse]&#10;寫程式到深夜"></textarea></label>
-<label class="check"><input type="checkbox" name="instrumental"> 純音樂（不能跟歌詞一起用）</label>
-<label class="field"><span>掛在哪把金鑰（測歷史頁分得出來沒）</span>
-<select name="key_name"><option value="">管理台（不掛任何金鑰）</option>{options}</select></label>
-<button type="submit">送出並開始生成</button></form></div>{result}""")
+<label class="field"><span>Tiêu đề bài hát (Chế độ Custom)</span>
+<input type="text" name="title" placeholder="Đêm khuya viết code"></label>
+<label class="field"><span>Lời bài hát (Chế độ Custom)</span>
+<textarea name="lyrics" placeholder="[Verse]&#10;Đêm đã về khuya..."></textarea></label>
+<label class="check"><input type="checkbox" name="instrumental"> Nhạc không lời (Instrumental)</label>
+<label class="field"><span>Gắn với thẻ API Key nào</span>
+<select name="key_name"><option value="">Trang quản trị (Không gắn API Key)</option>{options}</select></label>
+<button type="submit">Gửi yêu cầu và Tạo nhạc</button></form></div>{result}""")
 
     @router.post("/admin/test")
     async def run_test(request: Request, prompt: str = Form(""),
@@ -416,22 +410,22 @@ def create_admin_router(*, settings: Settings, store: JobStore,
         if not _user(request):
             return _to_login()
         if submit is None:
-            return RedirectResponse(url("/admin/test?err=這個服務沒有開放測試送單"),
+            return RedirectResponse(url("/admin/test?err=Dịch vụ này chưa bật tính năng thử nghiệm tạo nhạc"),
                                     status_code=303)
         try:
             job_id = submit(prompt=prompt, lyrics=lyrics, style=style,
                             title=title, instrumental=bool(instrumental),
-                            key_name=key_name or "管理台測試")
+                            key_name=key_name or "Thử nghiệm Quản trị")
         except QueueFullError:
-            return RedirectResponse(url("/admin/test?err=佇列滿了，等一下再送"),
+            return RedirectResponse(url("/admin/test?err=Hàng đợi đầy, vui lòng thử lại sau ít phút"),
                                     status_code=303)
-        except Exception as e:  # 參數不合法(例如全空、歌詞配純音樂)由這裡吐回頁面
+        except Exception as e:
             detail = getattr(e, "detail", None) or str(e)
             return RedirectResponse(url(f"/admin/test?err={_esc(detail)[:120]}"),
                                     status_code=303)
         return RedirectResponse(url(f"/admin/test?job={job_id}"), status_code=303)
 
-    # ---- 歷史 ----
+    # ---- Lịch sử ----
 
     @router.get("/admin/history", response_class=HTMLResponse)
     async def history(request: Request, swept: int | None = None):
@@ -439,19 +433,18 @@ def create_admin_router(*, settings: Settings, store: JobStore,
         if not user:
             return _to_login()
         rows = "".join(_history_row(j, url) for j in store.list_recent(200))
-        note = (f'<p><span class="pill ok">已清掉 {swept} 個過期的 job 目錄</span></p>'
+        note = (f'<p><span class="pill ok">Đã dọn dẹp {swept} thư mục bài hát đã hết hạn</span></p>'
                 if swept is not None else "")
-        return _page(title="歷史", active="history", user=user,
-                     subtitle="近 200 筆 job。音檔可以直接在這頁播。",
-                     body=f"""<div class="card"><h2>近期 job</h2><table>
-<tr><th>時間</th><th>金鑰</th><th>內容</th><th>狀態</th><th>耗時</th><th>產出</th></tr>
-{rows or '<tr><td colspan="6" class="muted">還沒有任何 job</td></tr>'}
+        return _page(title="Lịch sử", active="history", user=user,
+                     subtitle="Danh sách 200 bài hát được yêu cầu gần nhất. Có thể nghe trực tiếp trên trình duyệt.",
+                     body=f"""<div class="card"><h2>Các bài hát gần đây</h2><table>
+<tr><th>Thời gian</th><th>API Key</th><th>Nội dung</th><th>Trạng thái</th><th>Thời gian xử lý</th><th>Kết quả nghe thử</th></tr>
+{rows or '<tr><td colspan="6" class="muted">Chưa có bài hát nào được tạo</td></tr>'}
 </table></div>
-<div class="card"><h2>清理</h2>
-<p class="hint">音檔保留 {settings.audio_retention_days} 天，每次生成時會順手清掉過期的，
-這顆按鈕是要立刻清的時候用。job 記錄只留最新 1000 筆，建立新 job 時自動裁切。</p>
+<div class="card"><h2>Dọn dẹp file âm thanh hết hạn</h2>
+<p class="hint">File âm thanh được giữ trong {settings.audio_retention_days} ngày. Hệ thống sẽ tự động dọn dẹp file hết hạn.</p>
 {note}<form method="post" action="{url('/admin/cleanup')}">
-<button class="ghost">立刻清一次過期音檔</button></form></div>""")
+<button class="ghost">Dọn dẹp tệp âm thanh hết hạn ngay</button></form></div>""")
 
     @router.post("/admin/cleanup")
     async def cleanup_now(request: Request):
@@ -466,13 +459,13 @@ def create_admin_router(*, settings: Settings, store: JobStore,
 
 
 def _worker_row(w: dict) -> str:
-    state = "執行中" if w["busy"] else ("待命" if w["browser_up"] else "已休眠")
+    state = "Đang chạy" if w["busy"] else ("Đang chờ" if w["browser_up"] else "Đã ngủ")
     cls = "ok" if w["browser_up"] else "run"
     credits = w["credits"]
     if isinstance(credits, int):
-        credit_txt = f"{credits}（{credits // 10} 單）"
+        credit_txt = f"{credits} ({credits // 10} bài)"
     else:
-        credit_txt = '<span class="muted">未觀測</span>'
+        credit_txt = '<span class="muted">Chưa cập nhật</span>'
     return (f'<tr><td>{w["id"]}</td>'
             f'<td><span class="pill {cls}">{state}</span></td>'
             f'<td>{credit_txt}</td><td>{w["jobs_done"]}</td>'
@@ -487,45 +480,45 @@ def _pill(status: str) -> str:
 def _describe(params: dict | None) -> str:
     p = params or {}
     if p.get("mode") == "custom":
-        bits = [b for b in (f"曲風:{p.get('style')}" if p.get("style") else "",
-                            f"歌名:{p.get('title')}" if p.get("title") else "",
-                            "有歌詞" if p.get("lyrics") else "") if b]
+        bits = [b for b in (f"Style:{p.get('style')}" if p.get("style") else "",
+                            f"Tiêu đề:{p.get('title')}" if p.get("title") else "",
+                            "Có lời" if p.get("lyrics") else "") if b]
         desc = " ".join(bits) or "Custom"
     else:
         desc = p.get("prompt") or "-"
-    return desc + ("（純音樂）" if p.get("instrumental") else "")
+    return desc + (" (Nhạc không lời)" if p.get("instrumental") else "")
 
 
 def _clips_html(job: Job, url) -> str:
     out = []
     for c in job.clips:
-        dur = f"{c.duration:.0f} 秒" if c.duration else "-"
+        dur = f"{c.duration:.0f} giây" if c.duration else "-"
         name = _esc(c.title or c.id[:8])
         if c.filename:
             src = url(f"/api/jobs/{job.id}/files/{c.filename}")
             out.append(f'<div><b>{name}</b> <span class="muted">{dur}</span>'
                        f'<br><audio controls preload="metadata" src="{src}"></audio></div>')
         else:
-            out.append(f'<div class="muted">{name} {dur}（沒抓到音檔）</div>')
+            out.append(f'<div class="muted">{name} {dur} (Chưa tải được file)</div>')
     return "".join(out)
 
 
 def _test_result(job: Job | None, url) -> tuple[str, int]:
-    """回 (HTML, 幾秒後自動重整)。跑完就不再重整。"""
+    """Trả về (HTML, số giây tự động làm mới)."""
     if job is None:
         return "", 0
     running = job.status in ("queued", "generating")
     head = (f'<span class="pill {_pill(job.status)}">{_esc(job.status)}</span>'
-            f' <span class="muted">job {_esc(job.id)}</span>')
+            f' <span class="muted">Job ID: {_esc(job.id)}</span>')
     if running:
-        body = ('<p class="hint">生成中，這頁每 5 秒自動更新。'
-                '通常 2 到 4 分鐘，關掉頁面也不影響，工作照跑。</p>')
+        body = ('<p class="hint">Đang tạo nhạc, trang sẽ tự động làm mới mỗi 5 giây. '
+                'Quá trình mất 2-4 phút.</p>')
     elif job.status == "error":
-        body = (f'<p class="hint">{_esc(job.error)}：'
+        body = (f'<p class="hint">{_esc(job.error)}: '
                 f'{_esc(job.error_message or "")}</p>')
     else:
         body = _clips_html(job, url)
-    return f'<div class="card"><h2>這一單 {head}</h2>{body}</div>', (5 if running else 0)
+    return f'<div class="card"><h2>Yêu cầu {_esc(job.id)} {head}</h2>{body}</div>', (5 if running else 0)
 
 
 def _history_row(job: Job, url) -> str:
@@ -536,13 +529,11 @@ def _history_row(job: Job, url) -> str:
             state += f'<div class="muted">{_esc(job.error_message[:70])}</div>'
     tried = (job.params or {}).get("tried_workers")
     if tried:
-        # 被防機器人驗證碼擋下、換帳號重跑過的單。成功的那些在畫面上跟一般
-        # 的單長得一樣，不標出來就只有 log 看得到。
-        who = "、".join(str(i) for i in tried)
-        state += f'<div class="muted">帳號 {who} 被要求驗證碼，已改派</div>'
+        who = ", ".join(str(i) for i in tried)
+        state += f'<div class="muted">Tài khoản {who} yêu cầu xác minh CAPTCHA, đã tự động chuyển tài khoản</div>'
     elapsed = "-"
     if job.started_at and job.finished_at:
-        elapsed = f"{job.finished_at - job.started_at:.0f} 秒"
+        elapsed = f"{job.finished_at - job.started_at:.0f} giây"
     return f"""<tr><td class="muted">{_fmt_epoch(job.created_at)}</td>
 <td class="muted">{_esc((job.params or {}).get('api_key_name') or '-')}</td>
 <td>{_esc(_describe(job.params)[:70])}</td><td>{state}</td>

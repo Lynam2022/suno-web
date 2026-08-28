@@ -64,9 +64,9 @@ def test_wrong_password_does_not_grant_session(client):
 def test_login_then_pages_render(client):
     login(client)
     body = client.get("/admin").text
-    assert "剩餘點數" in body and "90" in body
-    assert "近期 job" in client.get("/admin/history").text
-    assert "送一單" in client.get("/admin/test").text
+    assert "Điểm còn lại" in body and "90" in body
+    assert "Các bài hát gần đây" in client.get("/admin/history").text
+    assert "Gửi yêu cầu tạo nhạc" in client.get("/admin/test").text
 
 
 def test_issue_key_then_it_authorizes_the_api(client):
@@ -180,7 +180,7 @@ def test_manual_cleanup_reports_how_many_it_deleted(client, tmp_path, monkeypatc
     r = client.post("/admin/cleanup", follow_redirects=False)
     assert "swept=1" in r.headers["location"]
     assert not old.exists() and fresh.exists()
-    assert "已清掉 1 個過期的 job 目錄" in client.get("/admin/history?swept=1").text
+    assert "Đã dọn dẹp 1 thư mục bài hát đã hết hạn" in client.get("/admin/history?swept=1").text
 
 
 def test_overview_lists_each_account_when_multi_worker(tmp_path, monkeypatch):
@@ -226,9 +226,9 @@ def test_overview_lists_each_account_when_multi_worker(tmp_path, monkeypatch):
         assert page.status_code == 200
         body = page.text
 
-    assert "派工輪流" in body
-    assert "300（30 單）" in body and "100（10 單）" in body
-    assert "已休眠" in body   # worker 1 的瀏覽器沒起來
+    assert "Phân bổ luân phiên" in body
+    assert "300 (30 bài)" in body and "100 (10 bài)" in body
+    assert "Đã ngủ" in body   # worker 1 的瀏覽器沒起來
     admin_db.reset_for_tests()
 
 
@@ -244,4 +244,4 @@ def test_history_marks_jobs_that_were_redispatched(client, tmp_path):
     store.save(job)
 
     body = client.get("/admin/history").text
-    assert "帳號 0、2 被要求驗證碼，已改派" in body
+    assert "Tài khoản 0, 2 yêu cầu xác minh CAPTCHA" in body

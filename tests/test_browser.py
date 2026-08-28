@@ -14,7 +14,7 @@ async def test_missing_chrome_binary_raises_clear_error(tmp_path):
     """找不到 Chrome 要給看得懂的訊息，不是 FileNotFoundError。"""
     bm = BrowserManager(headless=True, profile_dir=str(tmp_path / "p"),
                         chrome_binary="definitely-not-a-real-browser-xyz")
-    with pytest.raises(RuntimeError, match="找不到 Chrome"):
+    with pytest.raises(RuntimeError, match="Không tìm thấy"):
         await bm.start()
 
 

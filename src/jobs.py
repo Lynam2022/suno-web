@@ -347,7 +347,7 @@ class JobQueue:
                     clips = await asyncio.wait_for(runner(job), timeout=timeout)
                     job.clips = clips
                     if not any(c.downloadable for c in clips):
-                        raise GenerationError("download_failed", "一首可下載的都沒有")
+                        raise GenerationError("download_failed", "Không có bài hát nào sẵn sàng để tải xuống")
                     job.status = "done"
                 except GenerationError as e:
                     if _REDISPATCH_CODE and e.code == _REDISPATCH_CODE:
