@@ -94,6 +94,7 @@ class BrowserManager:
             # Playwright 啟動瀏覽器時本來就帶這個旗標，我們自己接手啟動之後
             # 要記得補回來。
             "--password-store=basic",
+            "--disable-blink-features=AutomationControlled",
         ]
         if self._headless:
             args.extend([
@@ -120,6 +121,11 @@ class BrowserManager:
             f"http://127.0.0.1:{port}")
         self._context = (self._browser.contexts[0] if self._browser.contexts
                          else await self._browser.new_context())
+        await self._context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+        """)
         self._page = (self._context.pages[0] if self._context.pages
                       else await self._context.new_page())
 
