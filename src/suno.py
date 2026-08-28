@@ -47,6 +47,9 @@ def parse_feed_payload(payload: Any) -> list[RawClip]:
                 duration = node.get("duration")
                 if duration is None and isinstance(meta, dict):
                     duration = meta.get("duration")
+                created_at = node.get("created_at")
+                if not created_at and isinstance(meta, dict):
+                    created_at = meta.get("created_at")
                 found[node["id"]] = RawClip(
                     id=node["id"],
                     title=node.get("title") or "",
@@ -54,7 +57,7 @@ def parse_feed_payload(payload: Any) -> list[RawClip]:
                     duration=float(duration) if duration else None,
                     audio_url=node.get("audio_url") or None,
                     image_url=node.get("image_url") or None,
-                    created_at=node.get("created_at") or None,
+                    created_at=created_at if isinstance(created_at, str) else None,
                     lyrics=(meta.get("prompt") or "") if isinstance(meta, dict) else "",
                     tags=(meta.get("tags") or "") if isinstance(meta, dict) else "",
                 )
