@@ -264,6 +264,12 @@ class SunoRunner:
                     prompt_el = page.locator('textarea[placeholder*="song"], textarea[placeholder*="Song"], textarea[maxlength="3000"]').first
                 if await prompt_el.count() > 0:
                     await prompt_el.fill(params["prompt"])
+                    try:
+                        await prompt_el.dispatch_event("input")
+                        await prompt_el.dispatch_event("change")
+                    except Exception:
+                        pass
+                    await page.wait_for_timeout(500)
                 if params.get("instrumental"):
                     toggle = page.locator(selectors.INSTRUMENTAL_TOGGLE).first
                     if await toggle.count() > 0:
@@ -297,6 +303,7 @@ class SunoRunner:
     async def _click_create(self, page: Page) -> None:
         candidates = [
             selectors.CREATE_BUTTON,
+            '[aria-label="Create song"]',
             '[aria-label="Create"]',
             'button:has-text("Create")',
             'button[type="submit"]',
@@ -305,12 +312,15 @@ class SunoRunner:
             btn = page.locator(sel).first
             if await btn.count() > 0:
                 try:
+                    await btn.scroll_into_view_if_needed(timeout=2000)
                     await btn.click(timeout=3000)
+                    await page.wait_for_timeout(1000)
                     return
                 except Exception:
                     handle = await btn.element_handle()
                     if handle:
                         await page.evaluate("el => el.click()", handle)
+                        await page.wait_for_timeout(1000)
                         return
         raise GenerationError("submit_failed", "Không nhấn được nút Create (Không tìm thấy nút Create trên trang Suno)")
 
