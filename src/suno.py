@@ -207,7 +207,7 @@ class SunoRunner:
         # before 集合。
         submit_time = time.time()
         await self._click_create(page)
-        new_ids = await self._wait_new_ids(before, submit_time)
+        new_ids = await self._wait_new_ids(before, submit_time, page=page)
         raws = await self._wait_terminal(page, new_ids)
         return await self._download_all(job.id, raws)
 
@@ -334,8 +334,9 @@ class SunoRunner:
         return clip_id not in before
 
     async def _wait_new_ids(self, before: set[str], submit_time: float,
-                            timeout: float = 150.0) -> set[str]:
+                            timeout: float = 150.0, page: Page | None = None) -> set[str]:
         deadline = time.time() + timeout
+        last_reload = time.time()
         while time.time() < deadline:
             new = {cid for cid in self._clips
                    if self._is_freshly_created(cid, before, submit_time)}
@@ -343,7 +344,13 @@ class SunoRunner:
                 await asyncio.sleep(3)
                 return {cid for cid in self._clips
                         if self._is_freshly_created(cid, before, submit_time)}
-            await asyncio.sleep(0.5)
+            if page is not None and time.time() - last_reload >= 15.0:
+                last_reload = time.time()
+                try:
+                    await page.reload(wait_until="domcontentloaded")
+                except Exception:
+                    pass
+            await asyncio.sleep(1.0)
         if self.generate_submitted:
             raise GenerationError(
                 "submit_failed",
