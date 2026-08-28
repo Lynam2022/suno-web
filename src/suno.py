@@ -220,7 +220,10 @@ class SunoRunner:
         Controller ruling 1：刻意蓋掉 brief 原本「if not page.url.startswith(...)
         才導覽」的條件式邏輯，因為那樣同一個 page 物件在跑第二個 job 時可能
         還停在第一個 job 填到一半、甚至已按過 Create 的頁面上，狀態不乾淨。"""
-        await page.goto(self._settings.suno_url, wait_until="domcontentloaded")
+        try:
+            await page.goto(self._settings.suno_url, wait_until="domcontentloaded", timeout=60000)
+        except Exception:
+            await page.goto(self._settings.suno_url, wait_until="domcontentloaded", timeout=60000)
         await page.wait_for_timeout(3000)
         if await page.locator(selectors.LOGGED_OUT_MARKER).count() > 0:
             self.logged_in = False

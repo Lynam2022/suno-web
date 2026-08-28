@@ -96,9 +96,9 @@ class BrowserManager:
             "--password-store=basic",
         ]
         if self._headless:
-            args.append("--headless=new")
+            args.extend(["--headless=new", "--disable-gpu", "--disable-dev-shm-usage"])
         if self._no_sandbox:
-            args.append("--no-sandbox")
+            args.extend(["--no-sandbox", "--disable-setuid-sandbox"])
         # Chrome 的 stderr 留著：它啟動失敗時的原因只寫在這裡（例如 sandbox
         # 沒設定好），丟掉的話錯誤訊息只能用猜的。
         self._stderr_path = profile / "chrome-stderr.log"
