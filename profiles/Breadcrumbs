@@ -1,0 +1,75 @@
+0:00:00 Startup
+0:00:00 UserEducation.Session.ActivePeriodStart
+0:00:00 Tab1 StartNav3 #auto_toplevel
+0:00:00 Browser1 Insert active Tab1 at 0
+0:00:00 TouchMode.EnteredNonTouchMode
+0:00:01 Tab1 FinishNav3
+0:00:02 Tab1 StartNav5 #renderer-script #link
+0:00:02 Tab1 FinishNav5
+0:00:02 Tab1 StartNav7 #renderer-script #auto_subframe
+0:00:02 Tab1 FinishNav7
+0:00:02 Tab1 PageLoad
+0:00:02 Tab1 StartNav8 #renderer-script #auto_subframe
+0:00:02 Tab1 FinishNav8
+0:00:02 Tab1 PageLoad
+0:00:02 Tab1 StartNav9 #renderer-script #auto_subframe
+0:00:02 Tab1 FinishNav9
+0:00:02 Tab1 PageLoad
+0:00:02 Tab1 StartNav13 #renderer-script #auto_subframe
+0:00:02 Tab1 FinishNav13
+0:00:02 Tab1 PageLoad
+0:00:02 Tab1 StartNav14 #renderer-script #auto_subframe
+0:00:02 Tab1 FinishNav14
+0:00:02 Tab1 PageLoad
+0:00:03 Tab1 StartNav19 #renderer-script #auto_subframe
+0:00:03 Tab1 FinishNav19
+0:00:03 Tab1 PageLoad
+0:00:03 Tab1 StartNav20 #renderer-script #auto_subframe
+0:00:03 Tab1 StartNav21 #renderer-script #auto_subframe
+0:00:03 Tab1 FinishNav21
+0:00:03 Tab1 PageLoad
+0:00:03 Tab1 FinishNav20
+0:00:03 Tab1 StartNav22 #renderer-script #auto_subframe
+0:00:03 Tab1 FinishNav22
+0:00:03 Tab1 PageLoad
+0:00:03 Tab1 StartNav23 #renderer-script #auto_subframe
+0:00:03 Tab1 PageLoad
+0:00:04 Tab1 FinishNav23
+0:00:04 Tab1 PageLoad
+0:00:04 Tab1 StartNav24 #renderer-script #auto_subframe
+0:00:04 Tab1 FinishNav24
+0:00:04 Tab1 PageLoad
+0:00:04 Tab1 StartNav25 #renderer-script #auto_subframe
+0:00:04 Tab1 FinishNav25
+0:00:04 Tab1 PageLoad
+0:00:04 Tab1 StartNav26 #renderer-script #auto_subframe
+0:00:04 Tab1 FinishNav26
+0:00:04 Tab1 PageLoad
+0:00:04 Tab1 StartNav27 #renderer-script #auto_subframe
+0:00:04 Tab1 FinishNav27
+0:00:04 Tab1 PageLoad
+0:00:04 Tab1 PageLoad
+0:00:04 Tab1 StartNav28 #renderer-script #auto_subframe
+0:00:04 Tab1 StartNav29 #renderer-script #auto_subframe
+0:00:04 Tab1 StartNav30 #renderer-script #auto_subframe
+0:00:04 Tab1 FinishNav30
+0:00:04 Tab1 PageLoad
+0:00:04 Tab1 FinishNav29
+0:00:04 Tab1 PageLoad #failure
+0:00:04 Tab1 FinishNav28
+0:00:04 Tab1 StartNav31 #renderer-script #auto_subframe
+0:00:04 Tab1 FinishNav31
+0:00:05 Tab1 PageLoad
+0:00:05 Tab1 PageLoad
+0:00:05 Tab1 StartNav32 #renderer-script #auto_subframe
+0:00:05 Tab1 FinishNav32
+0:00:05 Tab1 PageLoad
+0:00:05 Tab1 StartNav33 #renderer-script #auto_subframe
+0:00:05 Tab1 FinishNav33
+0:00:05 Tab1 PageLoad
+0:00:05 Tab1 StartNav34 #renderer-script #auto_subframe
+0:00:05 Tab1 FinishNav34
+0:00:05 Tab1 PageLoad
+0:00:06 Tab1 StartNav35 #renderer-script #auto_subframe
+0:00:06 Tab1 FinishNav35
+0:00:06 Tab1 PageLoad

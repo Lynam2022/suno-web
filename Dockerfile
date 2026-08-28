@@ -21,6 +21,7 @@ COPY . .
 
 ENV HEADLESS=true
 ENV CHROME_NO_SANDBOX=true
+ENV PROFILE_DIR=/app/profiles
 
 EXPOSE 8071
 
