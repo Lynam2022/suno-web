@@ -147,8 +147,8 @@ class SunoRunner:
             task.add_done_callback(self._sniffer_tasks.discard)
 
         def _on_request(request) -> None:
-            # 生成請求的路徑會隨 Suno 改版變動，只要是 POST 且路徑含 generate 即算送出
-            if request.method == "POST" and "generate" in request.url:
+            # 只要有非 /api/c/check 的 POST 請求發出，即代表 Create 表單請求已送出
+            if request.method == "POST" and "/api/c/check" not in request.url and "/log" not in request.url:
                 self.generate_submitted = True
 
         def _on_console(msg) -> None:
