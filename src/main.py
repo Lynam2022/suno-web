@@ -112,20 +112,18 @@ def create_app(*, settings: Settings, store: JobStore, queue: JobQueue,
             raise HTTPException(status_code=429, detail="queue_full")
         return {"job_id": job.id, "status": job.status}
 
-    @app.get("/api/jobs/{job_id}")
-    async def get_job(job_id: str, _=Depends(require_key)) -> dict:
-        job = store.get(job_id)
-        if job is None:
-            raise HTTPException(status_code=404, detail="not_found")
-        return job.to_api()
-
     def require_key_or_admin(request: Request):
-        """音檔端點：API 呼叫端帶 x-api-key，管理台的瀏覽器則靠已登入的
-        session cookie——歷史頁的連結是直接點開的，瀏覽器不會帶 header。"""
         if verify_admin_session(request.cookies.get("suno_admin"),
                                 settings.admin_session_secret):
             return "admin"
         return require_key(request)
+
+    @app.get("/api/jobs/{job_id}")
+    async def get_job(job_id: str, _=Depends(require_key_or_admin)) -> dict:
+        job = store.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="not_found")
+        return job.to_api()
 
     @app.get("/api/jobs/{job_id}/files/{name}")
     async def get_file(job_id: str, name: str,
