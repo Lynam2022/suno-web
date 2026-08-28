@@ -1,5 +1,6 @@
-2026/08/28-16:48:42.506 5080 Creating DB C:\Users\lythe\.suno-web\profiles\Default\Local Storage\leveldb since it was missing.
-2026/08/28-16:48:42.525 5080 Reusing MANIFEST C:\Users\lythe\.suno-web\profiles\Default\Local Storage\leveldb/MANIFEST-000001
-2026/08/28-16:49:42.532 2c9c Level-0 table #5: started
-2026/08/28-16:49:42.540 2c9c Level-0 table #5: 353151 bytes OK
-2026/08/28-16:49:42.542 2c9c Delete type=0 #3
+2026/08/28-18:09:13.572 60cc Reusing MANIFEST C:\Users\lythe\.suno-web\profiles\Default\Local Storage\leveldb/MANIFEST-000001
+2026/08/28-18:09:13.577 60cc Recovering log #13
+2026/08/28-18:09:13.579 60cc Reusing old log C:\Users\lythe\.suno-web\profiles\Default\Local Storage\leveldb/000013.log 
+2026/08/28-18:10:13.584 2f00 Level-0 table #17: started
+2026/08/28-18:10:13.594 2f00 Level-0 table #17: 352503 bytes OK
+2026/08/28-18:10:13.595 2f00 Delete type=0 #13

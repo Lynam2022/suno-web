@@ -1,2 +1,3 @@
-2026/08/28-16:48:42.575 540c Creating DB C:\Users\lythe\.suno-web\profiles\Default\shared_proto_db since it was missing.
-2026/08/28-16:48:42.583 540c Reusing MANIFEST C:\Users\lythe\.suno-web\profiles\Default\shared_proto_db/MANIFEST-000001
+2026/08/28-18:09:13.678 4edc Reusing MANIFEST C:\Users\lythe\.suno-web\profiles\Default\shared_proto_db/MANIFEST-000001
+2026/08/28-18:09:13.679 4edc Recovering log #3
+2026/08/28-18:09:13.680 4edc Reusing old log C:\Users\lythe\.suno-web\profiles\Default\shared_proto_db/000003.log 

@@ -1,0 +1,9 @@
+
+DevTools listening on ws://127.0.0.1:64843/devtools/browser/903607cc-da5b-4aec-b00b-7ffff341489b
+Created TensorFlow Lite XNNPACK delegate for CPU.
+[10244:20852:0828/175241.156:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[10244:20852:0828/175301.612:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[10244:20852:0828/175326.351:ERROR:google_apis\gcm\engine\connection_factory_impl.cc:484] ConnectionHandler failed with net error: -2
+[10244:20852:0828/175355.338:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[10244:20852:0828/175527.090:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[10244:20852:0828/175849.666:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT

@@ -1,2 +1,3 @@
-2026/08/28-16:48:44.825 6434 Creating DB C:\Users\lythe\.suno-web\profiles\Default\GCM Store\Encryption since it was missing.
-2026/08/28-16:48:44.902 6434 Reusing MANIFEST C:\Users\lythe\.suno-web\profiles\Default\GCM Store\Encryption/MANIFEST-000001
+2026/08/28-18:09:16.680 4208 Reusing MANIFEST C:\Users\lythe\.suno-web\profiles\Default\GCM Store\Encryption/MANIFEST-000001
+2026/08/28-18:09:16.681 4208 Recovering log #3
+2026/08/28-18:09:16.681 4208 Reusing old log C:\Users\lythe\.suno-web\profiles\Default\GCM Store\Encryption/000003.log 
